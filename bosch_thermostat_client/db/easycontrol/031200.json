@@ -209,6 +209,14 @@
 
         }
     },
+    "heatingCircuits": {
+        "sensors": {
+            "supplyTemperatureSetpoint": {
+                "id": "supplyTemperatureSetpoint",
+                "name": "Supply Temperature Setpoint"
+            }        
+        }
+    },
     "sensors": {
         "outdoor_t1": {
             "id": "/system/sensors/temperatures/outdoor_t1",
