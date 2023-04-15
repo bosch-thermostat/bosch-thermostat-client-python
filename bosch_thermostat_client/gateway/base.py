@@ -338,11 +338,15 @@ class BaseGateway:
         return self.uuid
 
     async def raw_query(self, path):
+        rawlist = []
         """Run RAW query like /gateway/uuid."""
         try:
-            return await self._connector.get(path)
+            for uri in path:
+                _LOGGER.info(f"Scanning {uri}")
+                rawlist.append(await self._connector.get(uri))
         except DeviceException as err:
             _LOGGER.error(err)
+        return rawlist
 
     async def raw_put(self, path: str, value: Any) -> None:
         """Run RAW PUT."""
