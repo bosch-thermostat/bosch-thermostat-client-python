@@ -71,12 +71,24 @@ class EnergySensor(Sensor):
     async def fetch_range(self, start_time: datetime, stop_time: datetime) -> dict:
         output = {}
         pages_fetched = []
-        days_to_find = [(start_time + timedelta(x)).strftime("%d-%m-%Y") for x in range(0, (stop_time - start_time).days + 1)]
+        today = datetime.today()
+        strf_today = today.strftime("%d-%m-%Y")
+        if stop_time.date() > today.date() or start_time.date() > today.date():
+            _LOGGER.warn("Can't fetch data from the future! Exiting.")
+            return output
+        days_to_find = [
+            (start_time + timedelta(x)).strftime("%d-%m-%Y")
+            for x in range(0, (stop_time - start_time).days + 1)
+        ]
+        if strf_today in days_to_find:
+            _LOGGER.debug("Remove todays day from days to find")
+            days_to_find.remove(strf_today)
         async with self._lock:
             current_date = start_time
             while current_date <= stop_time:
                 _day_dt = current_date.strftime("%d-%m-%Y")
                 if self._past_data and _day_dt in self._past_data:
+                    _LOGGER.debug("Day found in already fetched data %s", _day_dt)
                     output[_day_dt] = self._past_data[_day_dt]
                     try:
                         days_to_find.remove(_day_dt)
@@ -89,9 +101,7 @@ class EnergySensor(Sensor):
                     for i in range(self.page_number - 1, -1, -1):
                         if i in pages_fetched:
                             continue
-                        data = await self._connector.get(
-                            self.build_uri(page_number=i)
-                        )
+                        data = await self._connector.get(self.build_uri(page_number=i))
                         if not data:
                             _LOGGER.debug("Data not returned from API.")
                             continue
@@ -104,11 +114,14 @@ class EnergySensor(Sensor):
                         if not days_to_find:
                             _LOGGER.debug("All days found in Bosch API!")
                             break
+                        else:
+                            _LOGGER.debug("Left days to find %s", days_to_find)
                         pages_fetched.append(i)
                     if _day_dt in self._past_data:
                         _LOGGER.debug("Data for day %s found!", _day_dt)
                         output[_day_dt] = self._past_data[_day_dt]
                 current_date += timedelta(days=1)
+        _LOGGER.debug("Returning %s", output)
         return output
 
     async def fetch_all(self):

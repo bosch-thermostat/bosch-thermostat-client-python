@@ -23,7 +23,7 @@ setup(
     ),
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
-        "aioxmpp>=0.13.1",
+        "aioxmpp>=0.13.3",
         "aiohttp",
         "click>=8",
         "colorlog",
@@ -40,8 +40,7 @@ setup(
         "Topic :: Utilities",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.10",
     ],
     entry_points={
         "console_scripts": [
