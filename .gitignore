@@ -57,4 +57,9 @@ data_file.txt
 data_file*
 scan*json
 
+# OAuth token files (contain sensitive credentials)
+tokens.json
+*tokens*.json
+.pointt_tokens*
+
 *old*
