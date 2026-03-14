@@ -137,13 +137,15 @@ async def load_tokens(token_file):
         return tokens
     return None
 
-async def authenticate_and_save_tokens(device_id=None, token_file="tokens.json"):
+async def authenticate_and_save_tokens(device_id=None, token_file="tokens.json", device_type=None):
     """
     Perform OAuth authentication flow and save tokens.
 
     Args:
         device_id (str, optional): Your Bosch device ID (gateway UUID)
         token_file (str): Path to save tokens (default: tokens.json)
+        device_type (str, optional): Device type constant, e.g. EASYCONTROL.
+            Defaults to BRUDERUS for backwards compatibility.
 
     Returns:
         dict: Token information if successful, None otherwise
@@ -153,6 +155,7 @@ async def authenticate_and_save_tokens(device_id=None, token_file="tokens.json")
         # We use a placeholder for access_token initially
         gateway = Oauth2Gateway(
             session=session,
+            device_type=device_type or BRUDERUS,
             session_type="HTTP",
             host=device_id,
             access_key=None,

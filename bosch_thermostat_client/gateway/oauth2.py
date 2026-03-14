@@ -22,6 +22,7 @@ from bosch_thermostat_client.const import (
 )
 from bosch_thermostat_client.const.ivt import SYSTEM_INFO
 from bosch_thermostat_client.const.oauth2 import CIRCUIT_TYPES, SYSTEM_MODEL
+from bosch_thermostat_client.const.easycontrol import PRODUCT_ID
 from bosch_thermostat_client.exceptions import DeviceException, FirmwareException, UnknownDevice
 from bosch_thermostat_client.db import get_db_of_firmware, async_get_errors
 from bosch_thermostat_client.circuits import Circuits
@@ -119,6 +120,14 @@ class Oauth2Gateway(BaseGateway):
             model = model_scheme.get(sys_model)
             if model is not None:
                 _LOGGER.debug("Found supported device %s", model)
+                return model
+        # Fallback: EASYCONTROL CT200 via POINTT API exposes productID instead
+        # of ModuleHwIdentStr or model field.
+        product_id = str(self._data[GATEWAY].get(PRODUCT_ID, ""))
+        if product_id:
+            model = model_scheme.get(product_id)
+            if model is not None:
+                _LOGGER.debug("Found supported device %s via productID %s", model, product_id)
                 return model
 
         _LOGGER.error(
