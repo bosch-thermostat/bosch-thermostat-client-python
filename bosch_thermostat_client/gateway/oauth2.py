@@ -154,12 +154,12 @@ class Oauth2Gateway(BaseGateway):
             # This replaces the need for /acCircuits and /ac1 endpoints
             circuit_id = "ac1"
 
-            # Get the circuit class for AC + POINTTAPI
-            CircuitClass = choose_circuit_type(self.device_type, circ_type)
-
-            # Create the AC circuit directly
-            # Note: _type should be the database key (e.g., "acCircuits"), not the const (e.g., "ac")
+            # Get the circuit class for AC + create the circuit.
+            # Wrapped in try so that device types that don't support AC (e.g.
+            # EASYCONTROL) skip gracefully instead of raising an unhandled
+            # KeyError from choose_circuit_type().
             try:
+                CircuitClass = choose_circuit_type(self.device_type, circ_type)
                 circuit_object = CircuitClass(
                     connector=self._connector,
                     attr_id=circuit_id,
@@ -167,17 +167,20 @@ class Oauth2Gateway(BaseGateway):
                     _type=CIRCUIT_TYPES[circ_type],  # Maps AC -> "acCircuits"
                     bus_type=self._bus_type,
                 )
-                _LOGGER.debug(f"Created AC circuit object: {circuit_object}")
+                _LOGGER.debug("Created AC circuit object: %s", circuit_object)
             except Exception as e:
-                _LOGGER.error(f"Failed to create AC circuit object: {e}", exc_info=True)
+                _LOGGER.debug(
+                    "Cannot initialize AC circuit for device_type %s: %s",
+                    self.device_type, e,
+                )
                 return []
 
             if circuit_object:
                 try:
                     await circuit_object.initialize()
-                    _LOGGER.debug(f"AC circuit initialized, state={circuit_object.state}")
+                    _LOGGER.debug("AC circuit initialized, state=%s", circuit_object.state)
                 except Exception as e:
-                    _LOGGER.error(f"Failed to initialize AC circuit: {e}", exc_info=True)
+                    _LOGGER.debug("Failed to initialize AC circuit: %s", e)
                     return []
 
                 if circuit_object.state:
