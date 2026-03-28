@@ -1,4 +1,5 @@
 import aiohttp
+import aiohttp.test_utils
 import asyncio
 
 

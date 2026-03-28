@@ -10,8 +10,8 @@ PUT = "put"
 GATEWAY = "gateway"
 MODELS = "models"
 
-TIMEOUT = 10
-REQUEST_TIMEOUT = 6
+TIMEOUT = 30
+REQUEST_TIMEOUT = 30
 BODY_400 = "400Error"
 WRONG_ENCRYPTION = "WrongEncryption"
 

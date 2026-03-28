@@ -10,7 +10,7 @@ from bosch_thermostat_client.const.easycontrol import ENERGY, PAGINATION, TRUE, 
 from .sensor import Sensor
 from bosch_thermostat_client.exceptions import DeviceException
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,6 +70,12 @@ class EnergySensor(Sensor):
 
     async def fetch_range(self, start_time: datetime, stop_time: datetime) -> dict:
         output = {}
+        if self.page_number <= 0:
+            _LOGGER.debug(
+                "fetch_range: page_number=%d, skipping (device not ready)",
+                self.page_number,
+            )
+            return output
         pages_fetched = []
         today = datetime.today()
         strf_today = today.strftime("%d-%m-%Y")
@@ -90,10 +96,19 @@ class EnergySensor(Sensor):
                 if self._past_data and _day_dt in self._past_data:
                     _LOGGER.debug("Day found in already fetched data %s", _day_dt)
                     output[_day_dt] = self._past_data[_day_dt]
+                    _LOGGER.debug(
+                        "fetch_range: remove %s from days_to_find (already in past_data)",
+                        _day_dt,
+                    )
                     try:
                         days_to_find.remove(_day_dt)
-                    except ValueError:
-                        pass
+                    except ValueError as err:
+                        _LOGGER.debug(
+                            "Suppressed %s in fetch_range (removing %s from days_to_find): %s",
+                            type(err).__name__,
+                            _day_dt,
+                            err,
+                        )
                 else:
                     _LOGGER.debug(
                         "Day not found in current past data. Searching in API. It can take some time!"
@@ -101,7 +116,10 @@ class EnergySensor(Sensor):
                     for i in range(self.page_number - 1, -1, -1):
                         if i in pages_fetched:
                             continue
-                        data = await self._connector.get(self.build_uri(page_number=i))
+                        uri = self.build_uri(page_number=i)
+                        _LOGGER.debug("Requesting energy statistics for %s", uri)
+                        data = await self._connector.get(uri)
+                        _LOGGER.debug("Response for energy statistics %s: %s", uri, data)
                         if not data:
                             _LOGGER.debug("Data not returned from API.")
                             continue
@@ -109,8 +127,13 @@ class EnergySensor(Sensor):
                             self._past_data[row["d"]] = row
                             try:
                                 days_to_find.remove(row["d"])
-                            except ValueError:
-                                pass
+                            except ValueError as err:
+                                _LOGGER.debug(
+                                    "Suppressed %s in fetch_range (removing %s from days_to_find): %s",
+                                    type(err).__name__,
+                                    row["d"],
+                                    err,
+                                )
                         if not days_to_find:
                             _LOGGER.debug("All days found in Bosch API!")
                             break
@@ -129,7 +152,10 @@ class EnergySensor(Sensor):
             if self._past_data:
                 return self._past_data
             for i in range(0, self.page_number):
-                data = await self._connector.get(self.build_uri(page_number=i))
+                uri = self.build_uri(page_number=i)
+                _LOGGER.debug("Requesting energy statistics for %s", uri)
+                data = await self._connector.get(uri)
+                _LOGGER.debug("Response for energy statistics %s: %s", uri, data)
                 if not data:
                     return None
                 for row in data.get(VALUE, []):
@@ -142,23 +168,32 @@ class EnergySensor(Sensor):
             return int(self._page_number)
         return -1
 
-    async def update(self, time=None):
+    async def update(self, time: datetime | None = None):
         """Update info about Recording Sensor asynchronously."""
+        if time is None:
+            time = datetime.now(timezone.utc)
         try:
             pagination = await self._connector.get(self._pagination_uri)
             used = pagination.get(USED, False)
             if used == TRUE:
                 self._page_number = pagination.get(VALUE, self._page_number)
-        except DeviceException:
-            pass
+        except DeviceException as err:
+            _LOGGER.debug(
+                "Suppressed %s in fetch_range (pagination get): %s",
+                type(err).__name__,
+                err,
+            )
         try:
             if self.page_number > 0:
                 self._entry_data = {}
                 for i in range(self.page_number - 2, self.page_number):
-                    result = await self._connector.get(self.build_uri(page_number=i))
+                    uri = self.build_uri(page_number=i)
+                    _LOGGER.debug("Requesting energy statistics for %s", uri)
+                    result = await self._connector.get(uri)
+                    _LOGGER.debug("Response for energy statistics %s: %s", uri, result)
                     self.process_results(result, time)
         except DeviceException as err:
             _LOGGER.error(
-                f"Can't update data for {self.name}. Trying uri: {self._data[URI]}. Error message: {err}"
+                f"Can't update data for {self.name}. Trying uri: {self._data[self.attr_id][URI]}. Error message: {err}"
             )
             self._extra_message = f"Can't update data. Error: {err}"

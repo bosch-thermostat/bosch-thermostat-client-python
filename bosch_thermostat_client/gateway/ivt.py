@@ -44,6 +44,7 @@ class IVTGateway(BaseGateway):
         access_key=None,
         password=None,
         session=None,
+        ssl_context=None,
     ):
         """IVT Gateway constructor
 
@@ -64,6 +65,7 @@ class IVTGateway(BaseGateway):
             loop=session,
             access_key=self._access_token,
             encryption=Encryption(access_key, password),
+            ssl_context=ssl_context,
         )
         self._data = {GATEWAY: {}, HC: None, DHW: None, SENSORS: None}
         super().__init__(host)

@@ -14,7 +14,7 @@ from bosch_thermostat_client.const import (
 from .sensor import Sensor
 from bosch_thermostat_client.exceptions import DeviceException
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,7 +79,9 @@ class RecordingSensor(Sensor):
             current_date = start_time
             while current_date < stop_time:
                 uri = self.build_uri(time=current_date)
+                _LOGGER.debug("Requesting statistics for %s", uri)
                 data = await self._connector.get(uri)
+                _LOGGER.debug("Response for statistics %s: %s", uri, data)
                 if not data:
                     continue
                 if RECORDING in data:
@@ -111,14 +113,17 @@ class RecordingSensor(Sensor):
         interval = time.strftime("%Y-%m-%d")
         return f"{self._data[self.attr_id][URI]}?{INTERVAL}={interval}"
 
-    async def update(self, time: datetime = datetime.utcnow()) -> None:
+    async def update(self, time: datetime | None = None) -> None:
         """Update info about Recording Sensor asynchronously."""
+        if time is None:
+            time = datetime.now(timezone.utc)
         try:
             if time.hour < 1:
                 time = time - timedelta(hours=12)
             uri = self.build_uri(time)
+            _LOGGER.debug("Requesting statistics for %s", uri)
             result = await self._connector.get(uri)
-            _LOGGER.debug("Fetching uri for recording sensor %s", uri)
+            _LOGGER.debug("Response for statistics %s: %s", uri, result)
             self.process_results(result, time)
         except DeviceException as err:
             _LOGGER.error(

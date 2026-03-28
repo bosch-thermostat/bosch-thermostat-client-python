@@ -65,12 +65,10 @@ class BaseGateway:
             host (str): hostname or serial or IP Address
         """
         self._host = host
-        self._firmware_version = None
-        self._supported_firmware = False
+        self._firmware_version = "0.0.0"
         self._device = None
         self._db = None
         self._initialized = None
-        self.initialization_msg = None
         self._bus_type = None
         self._errors = None
 
@@ -348,8 +346,21 @@ class BaseGateway:
             _LOGGER.debug("Failed to check_connection: %s", err)
         return self.uuid
 
+    async def get(self, path):
+        """Run RAW query like /gateway/uuid."""
+        return await self.raw_query(path)
+
+    async def put(self, path: str, value: Any) -> None:
+        """Run RAW PUT."""
+        return await self.raw_put(path=path, value=value)
+
     async def raw_query(self, path):
         """Run RAW query like /gateway/uuid."""
+        if not path or not isinstance(path, str):
+            _LOGGER.error("Invalid path provided for raw_query: %s", path)
+            return None
+        if not path.startswith("/"):
+            path = f"/{path}"
         try:
             return await self._connector.get(path)
         except DeviceException as err:
@@ -357,6 +368,11 @@ class BaseGateway:
 
     async def raw_put(self, path: str, value: Any) -> None:
         """Run RAW PUT."""
+        if not path or not isinstance(path, str):
+            _LOGGER.error("Invalid path provided for raw_put: %s", path)
+            return
+        if not path.startswith("/"):
+            path = f"/{path}"
         try:
             return await self._connector.put(path=path, value=value)
         except DeviceException as err:
@@ -364,6 +380,13 @@ class BaseGateway:
 
     async def close(self, force: bool = False) -> None:
         await self._connector.close(force)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+        await self.close()
+        return False
 
     async def check_firmware_validity(self):
         """Run query against firmware version."""

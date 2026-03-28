@@ -46,6 +46,7 @@ class EasycontrolGateway(BaseGateway):
         password=None,
         session=None,
         easycontrol_connector=None,
+        ssl_context=None,
     ):
         """
         Initialize gateway.
@@ -69,6 +70,7 @@ class EasycontrolGateway(BaseGateway):
             access_key=self._access_token,
             encryption=Encryption(access_key, password),
             device_type=EASYCONTROL,
+            ssl_context=ssl_context,
         )
         self._session_type = session_type
         self._data = {GATEWAY: {}, ZN: None, DHW: None, DV: None, SENSORS: None}
