@@ -7,6 +7,12 @@ from bosch_thermostat_client.const.ivt import INVALID
 
 _LOGGER = logging.getLogger(__name__)
 
+MISSING_ENDPOINT_ERROR_MARKERS = (
+    "doesn not exist: 404",
+    "does not exist: 404",
+)
+MISSING_ENDPOINT_WARNING_INTERVAL = 60
+
 
 class Sensor(BoschSingleEntity, DeviceClassEntity):
     """Single sensor object."""
@@ -43,6 +49,32 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
             self._data = data
         else:
             self._data = {attr_id: {RESULT: {}, URI: path, TYPE: kind}}
+        self._missing_endpoint_warning_counts: dict[str, int] = {}
+
+    @staticmethod
+    def _is_missing_endpoint_error(error: Exception) -> bool:
+        error_text = str(error)
+        return any(marker in error_text for marker in MISSING_ENDPOINT_ERROR_MARKERS)
+
+    def _should_log_update_error(self, uri: str, error: Exception) -> bool:
+        if not self._is_missing_endpoint_error(error):
+            self._missing_endpoint_warning_counts.pop(uri, None)
+            return True
+
+        count = self._missing_endpoint_warning_counts.get(uri, 0) + 1
+        self._missing_endpoint_warning_counts[uri] = count
+        return count == 1 or count % MISSING_ENDPOINT_WARNING_INTERVAL == 0
+
+    def _log_sensor_update_error(self, uri: str, error: Exception) -> None:
+        log_level = (
+            logging.WARNING
+            if self._should_log_update_error(uri, error)
+            else logging.DEBUG
+        )
+        _LOGGER.log(
+            log_level,
+            f"Can't update data for {self.name}. Trying uri: {uri}. Error message: {error}",
+        )
 
     @property
     def kind(self) -> str:
@@ -65,8 +97,6 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
                 self.process_results(result=result, key=self._main_data[ID])
                 self._state = True
             except DeviceException as err:
-                _LOGGER.warning(
-                    f"Can't update data for {self.name}. Trying uri: {item[URI]}. Error message: {err}"
-                )
+                self._log_sensor_update_error(item[URI], err)
                 self._extra_message = f"Can't update data. Error: {err}"
                 self._state = False
