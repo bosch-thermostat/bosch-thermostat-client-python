@@ -1,0 +1,24 @@
+{
+  "versionFirmwarePath": "/gateway/versionFirmware",
+  "gateway": {
+    "uuid": "/gateway/uuid",
+    "dateTime": "/gateway/dateTime",
+    "versionFirmware": "/gateway/versionFirmware",
+    "brand": "/system/brand",
+    "systemInfo": "/system/info",
+    "versionHardware": "/gateway/versionHardware",
+    "serialId": "/gateway/serialId",
+    "timeZone": "/gateway/tzInfo/timeZone",
+    "systemBus": "/system/bus"
+  },
+  "models": {
+    "MX300": {
+      "value": "MX300",
+      "name": "MX300",
+      "type": "BRUDERUS"
+    }
+  },
+  "_unsupported": {
+    "systemType": "/system/systemType"
+  }
+}
