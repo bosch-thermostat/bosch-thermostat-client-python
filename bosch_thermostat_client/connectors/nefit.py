@@ -15,7 +15,7 @@ class NefitConnector(XMPPBaseConnector):
     force_starttls = False
     use_ssl = False
 
-    def _build_message(self, method, path, data=None) -> str:
+    def _build_message(self, method, path, data=None, seq_no=0) -> str:
         if not path:
             return
         if method == GET:

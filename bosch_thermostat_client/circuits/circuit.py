@@ -76,7 +76,13 @@ class BasicCircuit(BoschSingleEntity):
                 result = await self._connector.get(self._data[key][URI])
                 self.process_results(result, key)
                 self._state = True
-            except DeviceException:
+            except DeviceException as err:
+                _LOGGER.debug(
+                    "Suppressed %s in update_requested_key for %s: %s",
+                    type(err).__name__,
+                    key,
+                    err,
+                )
                 self._state = False
 
     @property
@@ -289,8 +295,13 @@ class Circuit(BasicCircuit):
                 result = await self._connector.get(item[URI])
                 self.process_results(result, key)
                 return result
-            except DeviceException:
-                pass
+            except DeviceException as err:
+                _LOGGER.debug(
+                    "Suppressed %s in error update flow for %s: %s",
+                    type(err).__name__,
+                    key,
+                    err,
+                )
             return None
 
         for key, item in self._data.items():

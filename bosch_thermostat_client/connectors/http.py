@@ -54,6 +54,10 @@ class HttpConnector:
             async with method(self._format_url(path), **kwargs) as res:
                 return await get_response(method.__name__, res)
         except ClientResponseError as err:
+            if err.status == 404:
+                from bosch_thermostat_client.errors import Response404Error
+
+                raise Response404Error(f"URI {path} doesn not exist: {err}")
             raise DeviceException(f"URI {path} doesn not exist: {err}")
         except ClientConnectorError as err:
             raise DeviceException(err)
@@ -71,6 +75,10 @@ class HttpConnector:
     def set_timeout(self, timeout=10):
         """Set timeout for API calls."""
         self._request_timeout = timeout
+
+    async def request(self, path):
+        """Request message from API with given path. Backward compatibility for tests."""
+        return await self.get(path)
 
     async def get(self, path):
         """Get message from API with given path."""

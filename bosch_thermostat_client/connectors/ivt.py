@@ -1,4 +1,6 @@
 """XMPP Connector to talk to bosch."""
+import itertools
+
 from bosch_thermostat_client.const import PUT, GET, USER_AGENT, CONTENT_TYPE, APP_JSON
 from bosch_thermostat_client.const.ivt import TELEHEATER, IVT
 from .xmpp import XMPPBaseConnector
@@ -23,10 +25,10 @@ class IVTXMPPConnector(XMPPBaseConnector):
             access_key (str): access key to bosch
             encryption (obj): Encryption object
         """
-        self._seqno = 1
-        super().__init__(host=host, access_key=access_key, encryption=encryption)
+        self._seqno = itertools.count(1)
+        super().__init__(host=host, access_key=access_key, encryption=encryption, **kwargs)
 
-    def _build_message(self, method, path, data=None) -> str:
+    def _build_message(self, method, path, data=None, seq_no=0) -> str:
         if not path:
             return
         if method == GET:
@@ -34,7 +36,7 @@ class IVTXMPPConnector(XMPPBaseConnector):
                 [
                     f"GET {path} HTTP/1.1",
                     f"{USER_AGENT}: {TELEHEATER}",
-                    f"Seq-No: {self._seqno}",
+                    f"Seq-No: {seq_no}",
                     "\r\r",
                 ]
             )
@@ -45,12 +47,11 @@ class IVTXMPPConnector(XMPPBaseConnector):
                     f"{USER_AGENT}: {TELEHEATER}",
                     f"{CONTENT_TYPE}: {APP_JSON}",
                     f"Content-Length: {len(data)}",
-                    f"Seq-No: {self._seqno}",
+                    f"Seq-No: {seq_no}",
                     "",
                     data.decode("utf-8"),
                 ]
             )
         else:
             return
-        self._seqno += 1
         return body
