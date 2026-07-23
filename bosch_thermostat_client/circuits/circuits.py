@@ -11,19 +11,25 @@ from bosch_thermostat_client.const import (
     DHW,
     ZN,
     SC,
+    AC,
     REFERENCES,
+    OAUTH2,
 )
 from bosch_thermostat_client.helper import BoschEntities
 from .nefit import NefitCircuit, NefitHeatingCircuit
 from .ivt import IVTCircuit
 from .easycontrol import EasycontrolCircuit, EasyZoneCircuit
-from bosch_thermostat_client.const.ivt import IVT, CIRCUIT_TYPES, IVT_MBLAN
+from .ivtair import ACCircuit
+from bosch_thermostat_client.const.ivt import IVT, CIRCUIT_TYPES, IVT_MBLAN, IVTAIR, BRUDERUS
 from bosch_thermostat_client.const.nefit import NEFIT
 from bosch_thermostat_client.const.easycontrol import (
     EASYCONTROL,
     PROGRAM_LIST,
     DV,
     CIRCUIT_TYPES as EASYCONTROL_CIRCUIT_TYPES,
+)
+from bosch_thermostat_client.const.oauth2 import (
+    CIRCUIT_TYPES as POINTTAPI_CIRCUIT_TYPES,
 )
 from bosch_thermostat_client.schedule import ZonePrograms
 
@@ -38,9 +44,12 @@ def choose_circuit_type(device_type, circuit_type):
             return HC
         elif circuit_type == DHW and device_type == EASYCONTROL:
             return DHW
+        elif circuit_type == AC:
+            return AC
         else:
             return ""
 
+    _LOGGER.debug("searching for circuit type: %s", device_type + suffix())
     return {
         IVT: IVTCircuit,
         IVT_MBLAN: IVTCircuit,
@@ -49,6 +58,8 @@ def choose_circuit_type(device_type, circuit_type):
         EASYCONTROL: EasycontrolCircuit,
         EASYCONTROL + DHW: EasyDhwCircuit,
         EASYCONTROL + ZN: EasyZoneCircuit,
+        IVTAIR + AC: ACCircuit,
+        BRUDERUS: IVTCircuit,
     }[device_type + suffix()]
 
 
@@ -125,6 +136,15 @@ class Circuits(BoschEntities):
                 attr_id=circuit[ID],
                 db=database,
                 _type=EASYCONTROL_CIRCUIT_TYPES[self._circuit_type],
+                bus_type=self._bus_type,
+            )
+        elif self._circuit_type == AC:
+            Circuit = choose_circuit_type(self._device_type, self._circuit_type)
+            return Circuit(
+                connector=self._connector,
+                attr_id=circuit[ID],
+                db=database,
+                _type=POINTTAPI_CIRCUIT_TYPES[self._circuit_type],
                 bus_type=self._bus_type,
             )
         return None

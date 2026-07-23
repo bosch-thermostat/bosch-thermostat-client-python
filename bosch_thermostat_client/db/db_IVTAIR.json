@@ -1,0 +1,27 @@
+{
+  "versionFirmwarePath": "/gateway/versionFirmware",
+  "gateway": {
+    "uuid": "/gateway/uuid",
+    "dateTime": "/gateway/DateTime",
+    "versionFirmware": "/gateway/versionFirmware",
+    "brand": "/system/brand",
+    "systemInfo": "/system/info",
+    "versionHardware": "/gateway/versionHardware",
+    "serialId": "/gateway/serialId",
+    "timeZone": "/gateway/tzInfo/timeZone",
+    "systemBus": "/system/bus",
+    "model": "/system/appliance/model"
+  },
+  "models": {
+    "rac-sharp-default": {
+      "value": "rac-sharp-default",
+      "name": "rac-sharp-default",
+      "type": "IVTAIR"
+    }
+  },
+  "_unsupported": {
+    "brand": "/system/brand",
+    "systemInfo": "/system/info",
+    "systemType": "/system/systemType"
+  }
+}

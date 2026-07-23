@@ -5,6 +5,38 @@ Supported protocols are HTTP and XMPP.
 
 Both are still in development.
 
+## PoinTT API (Cloud-based Air Conditioning Control)
+
+For Bosch air conditioning units accessed via the cloud PoinTT API:
+
+### Setup
+
+1. **Run OAuth setup script** to authenticate and obtain tokens:
+   ```bash
+   python3 examples/pointtapi_oauth_setup.py
+   ```
+
+2. **Use tokens in your application or Home Assistant**:
+   - For standalone use: The script saves tokens to a file for automatic management
+   - For Home Assistant: Use the tokens from the OAuth flow in your configuration
+
+### Limitations
+
+The PoinTT API has the following known limitations:
+
+- **Single AC unit per device** - No multi-zone support
+- **No scheduling capabilities** - Cannot configure time-based schedules
+- **No preset configurations** - Cannot save or recall preset modes
+- **Cloud-only control** - No local network control available
+- **Limited properties** - Some properties (like detailed fan speed readings) may not be available from the API
+
+### Home Assistant Integration
+
+See the Home Assistant integration documentation for details on:
+- Config entry setup with OAuth
+- Token management and refresh
+- Climate entity configuration
+
 ## Helper
 
 Now there is extra command added with this package `bosch_cli`.

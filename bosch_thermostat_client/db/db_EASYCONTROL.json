@@ -2,7 +2,7 @@
   "versionFirmwarePath": "/gateway/versionFirmware",
   "gateway": {
     "uuid": "/gateway/uuid",
-    "systemBus": "/system/interfaces",
+    "systemBus": "/system/bus",
     "versionFirmware": "/gateway/versionFirmware",
     "productID": "/gateway/productID",
     "dateTime": "/gateway/DateTime"

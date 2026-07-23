@@ -5,15 +5,17 @@ import logging
 from colorlog import ColoredFormatter
 import aiohttp
 import bosch_thermostat_client as bosch
-from bosch_thermostat_client.const import XMPP, HTTP
-from bosch_thermostat_client.const.ivt import IVT
+from bosch_thermostat_client.const import XMPP, HTTP, OAUTH2
+from bosch_thermostat_client.const.ivt import IVT, IVTAIR, BRUDERUS
 from bosch_thermostat_client.const.nefit import NEFIT
 from bosch_thermostat_client.const.easycontrol import EASYCONTROL
 from bosch_thermostat_client.version import __version__
 from bosch_thermostat_client.exceptions import FailedAuthException
+from bosch_thermostat_client.gateway import Oauth2Gateway
 import json
 import asyncio
 from functools import wraps
+from pathlib import Path
 from yaml import load
 
 try:
@@ -41,7 +43,6 @@ logging.getLogger().handlers[0].setFormatter(
         },
     )
 )
-
 
 def set_debug(debug: int) -> None:
     if debug == 0:
@@ -129,6 +130,127 @@ def coro(f):
 
     return wrapper
 
+async def load_tokens(token_file):
+    if token_file.is_file():
+        with open(token_file) as f:
+            tokens = json.load(f)
+        return tokens
+    return None
+
+async def authenticate_and_save_tokens(device_id=None, token_file="tokens.json"):
+    """
+    Perform OAuth authentication flow and save tokens.
+
+    Args:
+        device_id (str, optional): Your Bosch device ID (gateway UUID)
+        token_file (str): Path to save tokens (default: tokens.json)
+
+    Returns:
+        dict: Token information if successful, None otherwise
+    """
+    async with aiohttp.ClientSession() as session:
+        # Create connector to handle OAuth flow
+        # We use a placeholder for access_token initially
+        gateway = Oauth2Gateway(
+            session=session,
+            session_type="HTTP",
+            host=device_id,
+            access_key=None,
+            access_token="PLACEHOLDER",  # Will be replaced after OAuth
+            refresh_token=None,
+            token_file=None  # Don't auto-save yet
+        )
+
+        connector = gateway._connector
+
+        # Step 1: Generate and open OAuth URL
+        print("\n[Step 1] Opening browser for Bosch login...")
+        auth_url = connector.start_oauth_flow(open_browser=True)
+        print(f"\nIf browser didn't open, visit this URL manually:")
+        print(f"{auth_url}\n")
+
+        # Step 2: Get callback URL from user
+        print("[Step 2] After logging in, you'll be redirected to a URL starting with:")
+        print("         com.bosch.tt.dashtt.pointt://app/login?code=...")
+        print("\nNote: The page may show 'Cannot open page' - that's normal!")
+        print("      Just copy the entire URL from your browser's address bar.\n")
+
+        callback_url = input("Paste the callback URL here: ").strip()
+
+        if not callback_url:
+            print("❌ No URL provided. Exiting.")
+            return None
+
+        # Step 3: Extract authorization code
+        print("\n[Step 3] Extracting authorization code...")
+        code = connector.extract_code_from_url(callback_url)
+
+        if not code:
+            print("❌ Could not extract authorization code from URL.")
+            print("   Make sure you copied the complete callback URL.")
+            return None
+
+        print(f"✓ Authorization code extracted: {code[:20]}...")
+
+        # Step 4: Exchange code for tokens
+        print("\n[Step 4] Exchanging code for access tokens...")
+        success = await connector.exchange_code_for_tokens(code)
+
+        if not success:
+            print("❌ Token exchange failed. Check logs for details.")
+            return None
+
+        print("✓ Successfully obtained OAuth tokens!")
+
+        # Step 5: Save tokens to file
+        print(f"\n[Step 5] Saving tokens to {token_file}...")
+        token_data = {
+            "device_id": device_id,
+            "access_token": connector._access_token,
+            "refresh_token": connector._refresh_token,
+            "expires_at": connector._token_expires_at.isoformat() if connector._token_expires_at else None,
+        }
+
+        token_path = Path(token_file)
+        with open(token_path, 'w') as f:
+            json.dump(token_data, f, indent=2)
+
+        print(f"✓ Tokens saved to {token_path.absolute()}")
+
+async def init_gateway(host, session, session_type, device_type, token, password):
+    BoschGateway = bosch.gateway_chooser(device_type=device_type)
+    if (session_type == OAUTH2):
+        # cloud API (OAUTH2 authentication)
+        token_file = Path(token)
+        tokens = await load_tokens(token_file)
+        if not tokens:
+            _LOGGER.warning("Failed to open token file: %s", token)
+            await authenticate_and_save_tokens(host, token)
+            # retry loading token file
+            tokens = await load_tokens(token_file)
+            if tokens is None:
+                _LOGGER.error("Failed to load tokens after authentication. Exiting.")
+                raise FailedAuthException("Failed to load tokens after authentication.")
+
+        gateway = BoschGateway(
+            session=session,
+            session_type=session_type,
+            device_type=device_type,
+            host=host,
+            access_key=None,
+            access_token=tokens['access_token'],
+            refresh_token=tokens['refresh_token'],
+            token_file=token_file
+        )
+    else:
+        gateway = BoschGateway(
+            session=session,
+            session_type=session_type,
+            host=host,
+            access_token=token,
+            password=password,
+        )
+    return gateway
 
 @click.group(no_args_is_help=True)
 @click.pass_context
@@ -156,7 +278,7 @@ _cmd1_options = [
         envvar="BOSCH_HOST",
         type=str,
         required=True,
-        help="IP address of gateway or SERIAL for XMPP",
+        help="IP address of gateway or SERIAL for XMPP and OAUTH2 ('Login' on a sticker on your device)",
     ),
     click.option(
         "--token",
@@ -175,16 +297,16 @@ _cmd1_options = [
     click.option(
         "--protocol",
         envvar="BOSCH_PROTOCOL",
-        type=click.Choice([XMPP, HTTP], case_sensitive=True),
+        type=click.Choice([XMPP, HTTP, OAUTH2], case_sensitive=True),
         required=True,
-        help="Bosch protocol. Either XMPP or HTTP.",
+        help="Bosch protocol. Either XMPP, HTTP or OAUTH2.",
     ),
     click.option(
         "--device",
         envvar="BOSCH_DEVICE",
-        type=click.Choice([NEFIT, IVT, EASYCONTROL], case_sensitive=False),
+        type=click.Choice([NEFIT, IVT, EASYCONTROL, BRUDERUS, IVTAIR], case_sensitive=False),
         required=True,
-        help="Bosch device type. NEFIT, IVT or EASYCONTROL.",
+        help="Bosch device type (brand)",
     ),
     click.option(
         "-d",
@@ -206,7 +328,6 @@ _scan_options = [
     click.option(
         "--stdout", default=False, count=True, help="Print scan to stdout"
     ),
-    click.option("-d", "--debug", default=False, count=True),
     click.option(
         "-i",
         "--ignore-unknown",
@@ -253,32 +374,24 @@ async def scan(
             filemode="a",
         )
     set_debug(debug)
-
-    if device.upper() in (NEFIT, IVT, EASYCONTROL):
-        BoschGateway = bosch.gateway_chooser(device_type=device)
-    else:
-        _LOGGER.error("Wrong device type.")
-        return
+    device_type = device.upper()
     session_type = protocol.upper()
+    gateway = None
     if session_type == XMPP:
         session = asyncio.get_event_loop()
     elif session_type == HTTP:
         session = aiohttp.ClientSession()
-        if device.upper() != IVT:
-            _LOGGER.warn(
+        if device_type != IVT:
+            _LOGGER.warning(
                 "You're using HTTP protocol, but your device probably doesn't support it. Check for mistakes!"
             )
+    elif session_type == OAUTH2:
+        session = aiohttp.ClientSession()
     else:
         _LOGGER.error("Wrong protocol for this device")
         return
     try:
-        gateway = BoschGateway(
-            session=session,
-            session_type=session_type,
-            host=host,
-            access_token=token,
-            password=password,
-        )
+        gateway = await init_gateway(host, session, session_type, device_type,token, password)
 
         _LOGGER.debug("Trying to connect to gateway.")
         connected = True if ignore_unknown else await gateway.check_connection()
@@ -288,7 +401,9 @@ async def scan(
         else:
             _LOGGER.error("Couldn't connect to gateway!")
     finally:
-        await gateway.close(force=True)
+        await session.close()
+        if gateway is not None:
+            await gateway.close(force=True)
 
 
 _path_options = [
@@ -321,37 +436,31 @@ async def query(
     """Query values of Bosch thermostat."""
     set_debug(debug=debug)
 
-    if device.upper() in (NEFIT, IVT, EASYCONTROL):
-        BoschGateway = bosch.gateway_chooser(device_type=device)
-    else:
-        _LOGGER.error("Wrong device type.")
-        return
+    device_type = device.upper()
     session_type = protocol.upper()
     _LOGGER.info("Connecting to %s with '%s'", host, session_type)
+    gateway = None
     if session_type == XMPP:
         session = asyncio.get_event_loop()
     elif session_type == HTTP:
         session = aiohttp.ClientSession()
-        if device.upper() != IVT:
-            _LOGGER.warn(
+        if device_type != IVT:
+            _LOGGER.warning(
                 "You're using HTTP protocol, but your device probably doesn't support it. Check for mistakes!"
             )
+    elif session_type == OAUTH2:
+        session = aiohttp.ClientSession()
     else:
         _LOGGER.error("Wrong protocol for this device")
-        return
     try:
-        gateway = BoschGateway(
-            session=session,
-            session_type=session_type,
-            host=host,
-            access_token=token,
-            password=password,
-        )
+        gateway = await init_gateway(host, session, session_type, device_type, token, password)
         await _runquery(gateway, path)
     except FailedAuthException as e:
         _LOGGER.error(e)
     finally:
-        await gateway.close(force=True)
+        await session.close()
+        if gateway is not None:
+            await gateway.close(force=True)
 
 
 _path_put_options = [
@@ -394,35 +503,27 @@ async def put(
         return
     if value.isnumeric():
         value = float(value)
-    if device.upper() in (NEFIT, IVT, EASYCONTROL):
-        BoschGateway = bosch.gateway_chooser(device_type=device)
-    else:
-        _LOGGER.error("Wrong device type.")
-        return
+    device_type = device.upper()
     session_type = protocol.upper()
     _LOGGER.info("Connecting to %s with '%s'", host, session_type)
+    gateway = None
     if session_type == XMPP:
         session = asyncio.get_event_loop()
     elif session_type == HTTP:
         session = aiohttp.ClientSession()
-        if device.upper() != IVT:
-            _LOGGER.warn(
+        if device_type != IVT:
+            _LOGGER.warning(
                 "You're using HTTP protocol, but your device probably doesn't support it. Check for mistakes!"
             )
     else:
         _LOGGER.error("Wrong protocol for this device")
         return
     try:
-        gateway = BoschGateway(
-            session=session,
-            session_type=session_type,
-            host=host,
-            access_token=token,
-            password=password,
-        )
+        gateway = await init_gateway(host, session, session_type, device_type, token, password)
         await _runpush(gateway, path, value)
     finally:
-        await gateway.close(force=True)
+        if gateway is not None:
+            await gateway.close(force=True)
 
 
 if __name__ == "__main__":
