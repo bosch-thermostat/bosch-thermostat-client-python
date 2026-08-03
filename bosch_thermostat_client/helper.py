@@ -211,7 +211,7 @@ class BoschSingleEntity:
                     data[res_key] = value
                     self._update_initialized = True
                     updated = True
-        if STATE in result:
+        if result and STATE in result:
             for state in result[STATE]:
                 for key, item in state.items():
                     if VALUE in data and key == INVALID and data[VALUE] == item:

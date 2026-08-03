@@ -1,0 +1,25 @@
+{
+  "versionFirmwarePath": "/gateway/versionFirmware",
+  "gateway": {
+    "uuid": "/gateway/uuid",
+    "dateTime": "/gateway/DateTime",
+    "versionFirmware": "/gateway/versionFirmware",
+    "versionHardware": "/gateway/versionHardware",
+    "serialId": "/gateway/serialId",
+    "timeZone": "/gateway/tzInfo/timeZone",
+    "systemBus": "/system/bus",
+    "model": "/system/appliance/model"
+  },
+  "models": {
+    "POINTTAPI": {
+      "value": "POINTTAPI",
+      "name": "PoinTT API",
+      "type": "POINTTAPI"
+    }
+  },
+  "_unsupported": {
+    "brand": "/system/brand",
+    "systemInfo": "/system/info",
+    "systemType": "/system/systemType"
+  }
+}

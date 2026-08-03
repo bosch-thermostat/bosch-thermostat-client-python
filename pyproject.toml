@@ -66,6 +66,12 @@ known-first-party = ["bosch_thermostat_client"]
 quote-style = "double"
 indent-style = "space"
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+    "pytest-asyncio>=1.3.0",
+]
+
 [tool.pdm.scripts]
 lint = "pre-commit run --all-files"
 format = "ruff format ."
