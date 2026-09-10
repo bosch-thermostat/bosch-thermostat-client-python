@@ -41,6 +41,7 @@ from bosch_thermostat_client.db import (
     get_initial_db,
 )
 from bosch_thermostat_client.exceptions import (
+    DeviceConnectionError,
     DeviceException,
     FirmwareException,
     UnknownDevice,
@@ -345,6 +346,8 @@ class BaseGateway:
                 if VALUE in response:
                     self._data[GATEWAY][UUID] = response[VALUE]
         except DeviceException as err:
+            if isinstance(err, DeviceConnectionError):
+                raise
             _LOGGER.debug("Failed to check_connection: %s", err)
         return self.uuid
 

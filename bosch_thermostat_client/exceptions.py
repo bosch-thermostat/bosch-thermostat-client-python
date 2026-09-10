@@ -18,6 +18,10 @@ class DeviceException(BoschException):
     pass
 
 
+class DeviceConnectionError(DeviceException):
+    """HTTP request failed before a complete response was received."""
+
+
 class MsgException(BoschException):
     """
     Invalid request.
