@@ -29,7 +29,7 @@ from bosch_thermostat_client.const import (
 from bosch_thermostat_client.const.easycontrol import STEP_SIZE
 from bosch_thermostat_client.const.ivt import ALLOWED_VALUES, STATE, INVALID
 
-from .exceptions import DeviceException, EncryptionException
+from .exceptions import DeviceConnectionError, DeviceException, EncryptionException
 import base64
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,7 +75,7 @@ def get_all_intervals():
     ]
 
 
-async def crawl(url, _list, deep, get, exclude):
+async def crawl(url, _list, deep, get, exclude, *, strict_connection=False):
     """Crawl for Bosch API correct values."""
     try:
         resp = await get(url)
@@ -86,9 +86,14 @@ async def crawl(url, _list, deep, get, exclude):
             if REFERENCES in resp:
                 for uri in resp[REFERENCES]:
                     if ID in uri and deep > 0:
-                        await crawl(uri[ID], _list, deep - 1, get, exclude)
+                        await crawl(
+                            uri[ID], _list, deep - 1, get, exclude,
+                            strict_connection=strict_connection,
+                        )
         return _list
-    except DeviceException:
+    except DeviceException as err:
+        if strict_connection and isinstance(err, DeviceConnectionError):
+            raise
         return _list
 
 

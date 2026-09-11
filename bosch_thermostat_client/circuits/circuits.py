@@ -13,7 +13,7 @@ from bosch_thermostat_client.const import (
     SC,
     REFERENCES,
 )
-from bosch_thermostat_client.helper import BoschEntities
+from bosch_thermostat_client.helper import BoschEntities, crawl
 from .nefit import NefitCircuit, NefitHeatingCircuit
 from .ivt import IVTCircuit
 from .easycontrol import EasycontrolCircuit, EasyZoneCircuit
@@ -82,7 +82,9 @@ class Circuits(BoschEntities):
         if db_prefix not in database:
             _LOGGER.debug("Circuit not exist in database %s", db_prefix)
             return None
-        circuits = await self.retrieve_from_module(1, f"/{db_prefix}")
+        circuits = await crawl(
+            f"/{db_prefix}", [], 1, self._get, None, strict_connection=True
+        )
         if self._device_type == EASYCONTROL and PROGRAM_LIST in database:
             self._zone_programs = ZonePrograms(
                 program_uri=database[PROGRAM_LIST], connector=self._connector

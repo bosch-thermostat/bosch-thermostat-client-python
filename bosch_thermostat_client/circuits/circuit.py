@@ -30,7 +30,7 @@ from bosch_thermostat_client.const import (
     DEFAULT_MIN_TEMP,
 )
 from bosch_thermostat_client.helper import BoschSingleEntity
-from bosch_thermostat_client.exceptions import DeviceException
+from bosch_thermostat_client.exceptions import DeviceConnectionError, DeviceException
 from bosch_thermostat_client.sensors import Sensors
 
 from bosch_thermostat_client.operation_mode import OperationModeHelper
@@ -69,14 +69,16 @@ class BasicCircuit(BoschSingleEntity):
         """Give simple json scheme of circuit."""
         return self._db
 
-    async def update_requested_key(self, key):
+    async def update_requested_key(self, key, *, strict_connection=False):
         """Update info about Circuit asynchronously."""
         if key in self._data:
             try:
                 result = await self._connector.get(self._data[key][URI])
                 self.process_results(result, key)
                 self._state = True
-            except DeviceException:
+            except DeviceException as err:
+                if strict_connection and isinstance(err, DeviceConnectionError):
+                    raise
                 self._state = False
 
     @property
@@ -97,7 +99,7 @@ class BasicCircuit(BoschSingleEntity):
 
     async def initialize(self):
         """Check each uri if return json with values."""
-        await self.update_requested_key(STATUS)
+        await self.update_requested_key(STATUS, strict_connection=True)
         await self._switches.initialize(switches=self._db.get(SWITCHES))
 
     @property

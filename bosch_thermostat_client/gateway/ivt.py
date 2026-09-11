@@ -23,7 +23,7 @@ from bosch_thermostat_client.const.ivt import (
     SYSTEM_INFO,
 )
 from bosch_thermostat_client.encryption import IVTEncryption as Encryption
-from bosch_thermostat_client.exceptions import DeviceException
+from bosch_thermostat_client.exceptions import DeviceConnectionError, DeviceException
 
 from .base import BaseGateway
 
@@ -77,6 +77,8 @@ class IVTGateway(BaseGateway):
                     self._data[GATEWAY][name] = response[VALUE]
                 elif name == SYSTEM_INFO:
                     self._data[GATEWAY][SYSTEM_INFO] = response.get(VALUES, [])
+            except DeviceConnectionError:
+                raise
             except DeviceException as err:
                 _LOGGER.debug("Can't fetch data for update_info %s", err)
                 pass
