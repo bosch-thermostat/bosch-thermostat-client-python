@@ -19,13 +19,13 @@ readme = "README.md"
 license = {text = "Apache License 2.0"}
 
 [build-system]
-requires = ["pdm-pep517>=1.0.0"]
-build-backend = "pdm.pep517.api"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 
 [tool]
 [tool.pdm]
-version = {from = "bosch_thermostat_client/version.py"}
+version = { source = "file", path = "bosch_thermostat_client/version.py" }
 [tool.pdm.dev-dependencies]
 dev = [
     "ruff>=0.8.0",
