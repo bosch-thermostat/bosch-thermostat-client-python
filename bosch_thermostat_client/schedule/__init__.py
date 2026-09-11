@@ -42,6 +42,9 @@ from bosch_thermostat_client.exceptions import DeviceException
 
 _LOGGER = logging.getLogger(__name__)
 
+_CT200_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
+_CT200_NAIVE_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
 
 class Schedule:
     """Scheduler logic."""
@@ -262,7 +265,19 @@ class Schedule:
             return (DAYS_INT.index(day), switchpoints[self._time_key])
 
         if self._time:
-            bosch_date = datetime.strptime(self._time[0:25], self._date_format)
+            try:
+                bosch_date = datetime.strptime(self._time[0:25], self._date_format)
+            except ValueError as err:
+                if self._date_format != _CT200_DATE_FORMAT:
+                    raise
+                try:
+                    bosch_date = datetime.strptime(
+                        self._time, _CT200_NAIVE_DATE_FORMAT
+                    )
+                except ValueError:
+                    raise err
+                if bosch_date.strftime(_CT200_NAIVE_DATE_FORMAT) != self._time:
+                    raise err
             day_of_week = DAYS_INT[bosch_date.weekday()]
             if self._switch_points:
                 switch_points = self._switch_points.copy()
