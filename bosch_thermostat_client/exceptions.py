@@ -33,28 +33,31 @@ class MsgException(DeviceException):
     pass
 
 
-class FirmwareException(DeviceException):
-    """
-    Wrong firmware version.
+class FirmwareException(BoschException):
+    """Unsupported firmware version.
 
-    Unable to fulfill request.
-    Raised when host or API cannot be reached.
+    Deliberately NOT a DeviceException: it describes the device, not a failed
+    request, and consumers handle it separately from transport errors.
     """
 
     pass
 
 
-class FailedAuthException(DeviceException):
-    """Failed auth."""
+class FailedAuthException(BoschException):
+    """Failed auth.
+
+    Deliberately NOT a DeviceException: consumers catch DeviceException around
+    updates and discovery, and a wrong access key has to reach them so they can
+    ask for credentials again instead of retrying forever.
+    """
     pass
 
 
-class UnknownDevice(DeviceException):
-    """
-    Unknown device.
+class UnknownDevice(BoschException):
+    """Device model is not in the database.
 
-    Unable to fulfill request.
-    Raised when host or API cannot be reached.
+    Deliberately NOT a DeviceException, for the same reason as
+    FirmwareException.
     """
 
     pass

@@ -1,6 +1,7 @@
 """XMPP Connector to talk to bosch."""
 
 import ssl
+from functools import lru_cache
 from pathlib import Path
 
 from bosch_thermostat_client.const import (
@@ -18,6 +19,25 @@ USERAGENT = "rrc2"
 _CA_CERT_PATH = Path(__file__).resolve().parent.parent / "easycontrol_ca.pem"
 
 
+def easycontrol_ca_path() -> Path:
+    """Return the path of the CA bundle EasyControl's XMPP host is signed by."""
+    return _CA_CERT_PATH
+
+
+@lru_cache(maxsize=1)
+def easycontrol_ssl_context() -> ssl.SSLContext:
+    """Build an SSL context trusting the EasyControl CA.
+
+    Loading a CA file is blocking. The result is cached, so a consumer running
+    an event loop (Home Assistant) pays it once per process instead of on
+    every setup attempt; better still, call this in an executor and pass the
+    result as ``ssl_context=``.
+    """
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.load_verify_locations(cafile=str(_CA_CERT_PATH))
+    return ssl_ctx
+
+
 class EasycontrolConnector(XMPPBaseConnector):
     xmpp_host = "xmpp.rrcng.ticx.boschtt.net"
     _accesskey_prefix = "C42i9NNp_"
@@ -28,8 +48,7 @@ class EasycontrolConnector(XMPPBaseConnector):
     def __init__(self, host, encryption, **kwargs):
         ssl_ctx = kwargs.get("ssl_context")
         if not ssl_ctx:
-            ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ssl_ctx.load_verify_locations(cafile=str(_CA_CERT_PATH))
+            ssl_ctx = easycontrol_ssl_context()
         super().__init__(
             host=host,
             encryption=encryption,

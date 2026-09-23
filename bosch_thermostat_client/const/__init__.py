@@ -10,8 +10,11 @@ PUT = "put"
 GATEWAY = "gateway"
 MODELS = "models"
 
-TIMEOUT = 30
-REQUEST_TIMEOUT = 30
+TIMEOUT = 10
+#: Per attempt. XMPP GETs are retried once, and the request lock is released
+#: between attempts, so a PUT queued behind a failing GET waits at most one
+#: REQUEST_TIMEOUT rather than the whole retry budget.
+REQUEST_TIMEOUT = 10
 BODY_400 = "400Error"
 WRONG_ENCRYPTION = "WrongEncryption"
 

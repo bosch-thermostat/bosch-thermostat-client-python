@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bosch_thermostat_client.connectors.ivt import IVTXMPPConnector
+from bosch_thermostat_client.connectors.xmpp import _PendingRequest
 from bosch_thermostat_client.exceptions import DeviceException, MsgException, EncryptionException
+
+
+def _pending(future, path="/test/path", method="get"):
+    """Wrap a future the way XMPPBaseConnector._pending stores it."""
+    return _PendingRequest(future=future, method=method, path=path)
 
 
 @pytest.mark.asyncio
@@ -28,7 +34,7 @@ async def test_rel01_seq_no_matching_ignores_late_responses():
     # Case 1: Response matches a sequence that is <= _last_timeout_seq
     connector._last_timeout_seq = 10
     future_late = asyncio.get_running_loop().create_future()
-    connector._pending = {10: future_late}
+    connector._pending = {10: _pending(future_late)}
     
     # Simulate receiving a message with Seq-No: 0
     # The message body must look like a valid HTTP response for the listener to process it
@@ -45,7 +51,7 @@ async def test_rel01_seq_no_matching_ignores_late_responses():
     # Case 2: Response matches a sequence that is > _last_timeout_seq
     connector._last_timeout_seq = 9
     future_valid = asyncio.get_running_loop().create_future()
-    connector._pending = {10: future_valid}
+    connector._pending = {10: _pending(future_valid)}
     
     valid_msg = {
         "type": "chat",
@@ -88,7 +94,7 @@ async def test_rel03_session_end_sets_last_timeout_seq():
     # Setup pending futures
     fut1 = asyncio.get_running_loop().create_future()
     fut2 = asyncio.get_running_loop().create_future()
-    connector._pending = {5: fut1, 12: fut2}
+    connector._pending = {5: _pending(fut1), 12: _pending(fut2)}
     connector._last_timeout_seq = 0
     
     # Trigger session_end

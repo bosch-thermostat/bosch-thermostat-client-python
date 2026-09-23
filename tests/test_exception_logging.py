@@ -159,13 +159,17 @@ async def test_xmpp_already_completed_seq_no_logged_at_debug():
     from bosch_thermostat_client.connectors.xmpp import XMPPBaseConnector
     from unittest.mock import MagicMock
 
+    from bosch_thermostat_client.connectors.xmpp import _PendingRequest
+
     connector = XMPPBaseConnector.__new__(XMPPBaseConnector)
-    
+
     # Simulate an already-resolved future
     mock_future = MagicMock()
     mock_future.done.return_value = True
-    
-    connector._pending = {1: mock_future}
+
+    connector._pending = {
+        1: _PendingRequest(future=mock_future, method="get", path="/test")
+    }
     connector._encryption = MagicMock()
     
     # Simple dict-like object for msg

@@ -76,6 +76,10 @@ class RecordingSensor(Sensor):
         self, start_time: datetime, stop_time: datetime
     ) -> dict:
         async with self._lock:
+            # Only the range asked for. Keeping the accumulated dict here made
+            # every call return the previous calls' rows as well, which
+            # double-counted energy for a caller fetching in chunks.
+            self._past_data = {}
             current_date = start_time
             while current_date < stop_time:
                 uri = self.build_uri(time=current_date)
@@ -127,6 +131,6 @@ class RecordingSensor(Sensor):
             self.process_results(result, time)
         except DeviceException as err:
             _LOGGER.error(
-                f"Can't update data for {self.name}. Trying uri: {self._data[URI]}. Error message: {err}"
+                f"Can't update data for {self.name}. Trying uri: {self._data[self.attr_id][URI]}. Error message: {err}"
             )
             self._extra_message = f"Can't update data. Error: {err}"

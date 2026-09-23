@@ -1,9 +1,12 @@
 """XMPP Connector to talk to bosch."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import re
+from dataclasses import dataclass
 
 from slixmpp import Iq
 from slixmpp.exceptions import IqError, IqTimeout
@@ -15,10 +18,13 @@ from .client.slixmpp010 import BoschClientXMPP
 from bosch_thermostat_client.const import (
     ACCESS_KEY,
     GET,
+    ID,
     PUT,
     REQUEST_TIMEOUT,
+    TIMEOUT,
 )
 from bosch_thermostat_client.exceptions import (
+    BoschException,
     DeviceException,
     EncryptionException,
     FailedAuthException,
@@ -26,6 +32,23 @@ from bosch_thermostat_client.exceptions import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+#: Bosch gateways separate the lines of a message with "\r\r", "\r\n", "\n"
+#: or "\r" depending on model and firmware.
+_LINE_SPLIT = re.compile(r"\r\r|\r\n|\n|\r")
+#: "Seq-No: 3", "Content-Type: application/json", ... - a header, not a payload.
+_HEADER_LINE = re.compile(r"^[A-Za-z][A-Za-z0-9-]*:")
+_STATUS_2XX = re.compile(r"HTTP/1\.[0-1] 2\d\d")
+_STATUS_ERROR = re.compile(r"HTTP/1\.[0-1] [45]\d\d")
+
+
+@dataclass
+class _PendingRequest:
+    """One in-flight request, awaiting its reply."""
+
+    future: asyncio.Future
+    method: str
+    path: str
 
 
 class XMPPBaseConnector:
@@ -71,7 +94,7 @@ class XMPPBaseConnector:
         self._last_timeout_seq = -1
         self._auth_success = False
         self.received_message = None
-        self._pending: dict = {}
+        self._pending: dict[int, _PendingRequest] = {}
         self._put_locks: dict = {}
         self._request_lock = asyncio.Lock()
         self._count = 0
@@ -102,12 +125,50 @@ class XMPPBaseConnector:
             reply.send()
 
     async def close(self, force=False):
+        """Disconnect and stop any reconnect attempt still running.
+
+        slixmpp only fires ``session_end`` for a session that actually
+        started. A client that never connected - or is still retrying in the
+        background - would make close() wait for an event that never comes and
+        leave the reconnect loop running, so cancel the attempt and return.
+        """
+        self._cancel_connection_attempt()
+        if not self.client.is_connected():
+            _LOGGER.debug("XMPP client is not connected, nothing to disconnect")
+            self._abort_client()
+            self.disconnect_event.set()
+            return
         self.client.disconnect()
         try:
             async with asyncio.timeout(10):
                 await self.disconnect_event.wait()
         except asyncio.TimeoutError:
-            _LOGGER.debug("Timeout waiting for XMPP disconnect")
+            _LOGGER.debug("Timeout waiting for XMPP disconnect, aborting connection")
+            self._abort_client()
+
+    def _cancel_connection_attempt(self) -> None:
+        """Cancel an in-flight slixmpp connection attempt, if any.
+
+        Without this a connect() that timed out on our side keeps retrying with
+        an exponential back-off for the lifetime of the process.
+        """
+        cancel = getattr(self.client, "cancel_connection_attempt", None)
+        if not callable(cancel):
+            return
+        try:
+            cancel()
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.debug("Suppressed %s cancelling connection: %s", type(err).__name__, err)
+
+    def _abort_client(self) -> None:
+        """Drop the transport without waiting for the server."""
+        abort = getattr(self.client, "abort", None)
+        if not callable(abort):
+            return
+        try:
+            abort()
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.debug("Suppressed %s aborting connection: %s", type(err).__name__, err)
 
     async def session_start(self, *_, **__):
         self.client.send_presence()
@@ -131,9 +192,9 @@ class XMPPBaseConnector:
         if self._pending:
             # Mark the highest pending seq as timed out so we ignore late responses
             self._last_timeout_seq = max(self._pending.keys())
-            for key, fut in list(self._pending.items()):
-                if not fut.done():
-                    fut.set_exception(MsgException("XMPP session ended"))
+            for entry in list(self._pending.values()):
+                if not entry.future.done():
+                    entry.future.set_exception(MsgException("XMPP session ended"))
         self._pending.clear()
 
     def _register_message_handler(self) -> None:
@@ -169,24 +230,36 @@ class XMPPBaseConnector:
                     else:
                         _LOGGER.warning("XMPP request for %s failed after 2 attempts", path)
                     raise DeviceException(f"XMPP request error for {path} after 2 attempts: {err}")
+            except EncryptionException as err:
+                # Never leaves the connector: callers guard against DeviceException.
+                raise DeviceException(f"Can't decrypt response for {path}: {err}") from err
+            except BoschException:
+                # FailedAuthException and friends must reach the consumer intact.
+                raise
             except Exception as err:
                 _LOGGER.warning("Unexpected XMPP error for %s: %s", path, err)
                 raise DeviceException(f"Unexpected error for {path}: {err}")
-        
+
         raise DeviceException(f"Error requesting data from {path}: empty response")
 
     async def put(self, path, value):
         _LOGGER.debug("Sending PUT request to %s with value %s", path, value)
         json_data = json.dumps({"value": value})
-        data = await self._request(
-            method=PUT,
-            encrypted_msg=self._encryption.encrypt(json_data),
-            path=path,
-            payload=json_data,
-        )
+        try:
+            data = await self._request(
+                method=PUT,
+                encrypted_msg=self._encryption.encrypt(json_data),
+                path=path,
+                payload=json_data,
+            )
+        except EncryptionException as err:
+            raise DeviceException(f"Can't decrypt response for {path}: {err}") from err
         if data:
             return True
-    async def _request(self, method, path, encrypted_msg=None, timeout=REQUEST_TIMEOUT, payload=None):
+
+    async def _request(self, method, path, encrypted_msg=None, timeout=None, payload=None):
+        if timeout is None:
+            timeout = REQUEST_TIMEOUT
         async with self._request_lock:
             data = None
             _LOGGER.debug("XMPP unencrypted request: %s %s%s", method, path, f" payload: {payload}" if payload else "")
@@ -194,11 +267,13 @@ class XMPPBaseConnector:
                 if not self._auth_success:
                     _LOGGER.info("XMPP not authorized, connecting...")
                     self.client.connect()
-                    async with asyncio.timeout(30):
+                    async with asyncio.timeout(TIMEOUT):
                         await self.connected_event.wait()
                     if not self._auth_success:
                         raise FailedAuthException("Can't authorize to XMPP server.")
             except asyncio.TimeoutError:
+                # slixmpp keeps retrying in the background unless told otherwise.
+                self._cancel_connection_attempt()
                 _LOGGER.error(
                     "Can't connect to XMPP server!. Check your network connection or credentials!"
                 )
@@ -208,7 +283,7 @@ class XMPPBaseConnector:
             seq_no = self._count
             self._count += 1
             future = asyncio.get_running_loop().create_future()
-            self._pending[seq_no] = future
+            self._pending[seq_no] = _PendingRequest(future=future, method=method, path=path)
 
             put_lock = None
             if method == PUT:
@@ -240,7 +315,7 @@ class XMPPBaseConnector:
                 raise err
 
             except EncryptionException as err:
-                _LOGGER.warn(err)
+                _LOGGER.warning(err)
                 raise EncryptionException(err)
             finally:
                 self._pending.pop(seq_no, None)
@@ -248,6 +323,108 @@ class XMPPBaseConnector:
                     future.cancel()
                 if put_lock is not None and put_lock.locked():
                     put_lock.release()
+
+    @staticmethod
+    def _parse_seq_no(lines: list) -> int | None:
+        """Return the Seq-No header of a reply, or None when it carries none."""
+        for line in lines:
+            if line.startswith("Seq-No:"):
+                try:
+                    return int(line.split(":")[1].strip())
+                except (ValueError, IndexError):
+                    return None
+        return None
+
+    @staticmethod
+    def _extract_payload(lines: list) -> str | None:
+        """Return the encrypted body of a reply, or None when it has none.
+
+        A 204 (successful PUT) is headers only. Taking the last non-empty line
+        unconditionally would hand a header to the decrypter and turn a
+        successful write into an error.
+        """
+        for line in reversed(lines):
+            candidate = line.strip()
+            if not candidate:
+                continue
+            if candidate.startswith("HTTP/") or _HEADER_LINE.match(candidate):
+                return None
+            return candidate
+        return None
+
+    @staticmethod
+    def _payload_matches_path(decrypted, path: str) -> bool:
+        """True when a decrypted body belongs to the request for `path`."""
+        if not isinstance(decrypted, dict):
+            return True
+        identifier = decrypted.get(ID)
+        if not identifier or not isinstance(identifier, str):
+            return True
+        return identifier in path
+
+    def _match_response(self, seq_no: int | None, decrypted) -> _PendingRequest | None:
+        """Find the request a reply belongs to.
+
+        Matching is by Seq-No when the gateway echoes one. NEFIT gateways do
+        not, so fall back to the payload id against the pending path, the way
+        the pre-dispatch code did - requests are serialised by _request_lock,
+        so there is at most one candidate.
+        """
+        if seq_no is not None and seq_no in self._pending:
+            entry = self._pending[seq_no]
+            if not entry.future.done():
+                return entry
+            _LOGGER.debug(
+                "Received XMPP response for unknown or already completed Seq-No: %d",
+                seq_no,
+            )
+            return None
+
+        pending = [
+            (seq, entry)
+            for seq, entry in self._pending.items()
+            if not entry.future.done()
+        ]
+        if not pending:
+            _LOGGER.debug("Received XMPP response with no request waiting for it")
+            return None
+
+        if seq_no is not None:
+            if seq_no != 0:
+                _LOGGER.debug(
+                    "Received XMPP response for unknown or already completed Seq-No: %d",
+                    seq_no,
+                )
+                return None
+            # Some gateways ignore Seq-No and always answer with 0.
+            if len(pending) != 1:
+                _LOGGER.debug("Ambiguous Seq-No: 0 response, %d requests pending", len(pending))
+                return None
+            actual_seq, entry = pending[0]
+            # Only match a request started AFTER the last timeout: an earlier
+            # one is a ghost reply to a request that already gave up.
+            if actual_seq <= self._last_timeout_seq:
+                _LOGGER.warning(
+                    "Ignoring late Seq-No: 0 response (matches timed-out Seq: %d)",
+                    actual_seq,
+                )
+                return None
+            if not self._payload_matches_path(decrypted, entry.path):
+                _LOGGER.warning(
+                    "Ignoring Seq-No: 0 response for %s, it does not answer pending %s",
+                    decrypted.get(ID) if isinstance(decrypted, dict) else decrypted,
+                    entry.path,
+                )
+                return None
+            _LOGGER.debug("Matching Seq-No: 0 response to pending Seq-No: %d", actual_seq)
+            return entry
+
+        # No Seq-No header at all (NEFIT).
+        for _seq, entry in pending:
+            if self._payload_matches_path(decrypted, entry.path):
+                return entry
+        _LOGGER.debug("No pending request matches the received XMPP response")
+        return None
 
     def main_listener(self, msg):
         if msg["type"] not in ("normal", "chat"):
@@ -257,69 +434,55 @@ class XMPPBaseConnector:
             return
 
         try:
-            body_arr = body.split("\n")
-        except AttributeError:
+            body_arr = _LINE_SPLIT.split(body)
+        except (AttributeError, TypeError):
+            return
+        if not body_arr:
             return
 
-        # Extract Seq-No from headers
-        seq_no = None
-        for line in body_arr:
-            if line.startswith("Seq-No:"):
+        http_response = body_arr[0].strip()
+        seq_no = self._parse_seq_no(body_arr)
+
+        if _STATUS_2XX.match(http_response):
+            payload = self._extract_payload(body_arr)
+            decrypted_body = None
+            if payload is not None:
                 try:
-                    seq_no = int(line.split(":")[1].strip())
-                except (ValueError, IndexError):
-                    pass
-                break
-
-        if seq_no is not None:
-            fut = self._pending.get(seq_no)
-            if not fut and seq_no == 0 and len(self._pending) == 1:
-                # Some gateways ignore Seq-No and always return 0.
-                # Since we serialize requests via _request_lock, we can safely
-                # match the single pending request.
-                
-                # Match the single pending request's sequence number
-                actual_seq = next(iter(self._pending))
-                
-                # HARDENING: Only match if this request was started AFTER the last timeout.
-                # If actual_seq <= _last_timeout_seq, this response is likely a ghost
-                # from a request that already timed out.
-                if actual_seq <= self._last_timeout_seq:
-                    _LOGGER.warning(
-                        "Ignoring late Seq-No: 0 response (matches timed-out Seq: %d). Current Seq: %d",
-                        actual_seq,
-                        actual_seq,
-                    )
+                    decrypted_body = self._encryption.json_decrypt(payload)
+                except EncryptionException:
+                    entry = self._match_response(seq_no, None)
+                    if entry is not None:
+                        entry.future.set_exception(
+                            EncryptionException(f"Can't decrypt for {entry.path}")
+                        )
                     return
-
-                seq_no = actual_seq
-                fut = self._pending.get(seq_no)
-                _LOGGER.debug("Matching Seq-No: 0 response to pending Seq-No: %d", seq_no)
-
-            if not fut or fut.done():
-                _LOGGER.debug("Received XMPP response for unknown or already completed Seq-No: %d", seq_no)
+            entry = self._match_response(seq_no, decrypted_body)
+            if entry is None:
                 return
-        else:
-            _LOGGER.warning("Received XMPP message without Seq-No header")
+            _LOGGER.debug("XMPP unencrypted response for %s: %s", entry.path, decrypted_body)
+            if entry.method == PUT:
+                # A successful write answers 204 with no body.
+                entry.future.set_result(decrypted_body if decrypted_body else True)
+            else:
+                # An empty body is not a result; never hand back True for a GET,
+                # the caller would call .get() on a bool.
+                entry.future.set_result(decrypted_body if decrypted_body else None)
             return
 
-        http_response = body_arr[0]
-        if re.match(r"HTTP/1.[0-1] 20*", http_response):
-            payload = ""
-            for line in reversed(body_arr):
-                if line.strip():
-                    payload = line
-                    break
-            try:
-                decrypted_body = self._encryption.json_decrypt(payload)
-                _LOGGER.debug("XMPP unencrypted response (Seq: %d): %s", seq_no, decrypted_body)
-                fut.set_result(decrypted_body if decrypted_body else True)
-            except EncryptionException:
-                fut.set_exception(EncryptionException("Can't decrypt"))
-            return
-
-        if re.match(r"HTTP/1.[0-1] 40*", http_response):
-            fut.set_exception(MsgException(f"400 HTTP Error: {body}"))
+        if _STATUS_ERROR.match(http_response):
+            entry = self._match_response(seq_no, None)
+            if entry is None:
+                return
+            if http_response.split()[1] == "401":
+                # A rejected credential is not a transport error: it has to
+                # reach the consumer so it can ask for a new access key.
+                entry.future.set_exception(
+                    FailedAuthException(f"401 for {entry.path}: {body}")
+                )
+            else:
+                entry.future.set_exception(
+                    MsgException(f"{http_response} for {entry.path}: {body}")
+                )
 
     @staticmethod
     def discard_ssl_invalid_chain(*_, **__):
