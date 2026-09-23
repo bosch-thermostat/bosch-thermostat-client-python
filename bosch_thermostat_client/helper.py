@@ -302,6 +302,13 @@ class BoschSingleEntity:
                     result = await self._connector.get(item[URI])
                     self.process_results(result=result, key=key)
                     state = True
+                except DeviceConnectionError:
+                    # Backs every switch type. The gateway was unreachable, so
+                    # the consumer has to hear about it rather than see a
+                    # switch silently keep its last state.
+                    self._state = False
+                    self._extra_message = f"Can't update data. Error: {self.name}"
+                    raise
                 except DeviceException as err:
                     _LOGGER.warning(
                         f"Can't update data for {self.name}. Trying uri: {item[URI]}. Error message: {err}"

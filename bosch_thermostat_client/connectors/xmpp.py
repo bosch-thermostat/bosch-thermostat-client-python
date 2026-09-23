@@ -25,9 +25,11 @@ from bosch_thermostat_client.const import (
 )
 from bosch_thermostat_client.exceptions import (
     BoschException,
+    DeviceConnectionError,
     DeviceException,
     EncryptionException,
     FailedAuthException,
+    MsgConnectionError,
     MsgException,
 )
 
@@ -194,7 +196,11 @@ class XMPPBaseConnector:
             self._last_timeout_seq = max(self._pending.keys())
             for entry in list(self._pending.values()):
                 if not entry.future.done():
-                    entry.future.set_exception(MsgException("XMPP session ended"))
+                    # The connection dropped under the request: a transport
+                    # failure, not a gateway answer.
+                    entry.future.set_exception(
+                        MsgConnectionError("XMPP session ended")
+                    )
         self._pending.clear()
 
     def _register_message_handler(self) -> None:
@@ -229,7 +235,16 @@ class XMPPBaseConnector:
                         _LOGGER.debug("XMPP request for %s failed after 2 attempts (expected for some models)", path)
                     else:
                         _LOGGER.warning("XMPP request for %s failed after 2 attempts", path)
-                    raise DeviceException(f"XMPP request error for {path} after 2 attempts: {err}")
+                    # Preserve "the device was unreachable" across the retry, so
+                    # a consumer can tell it apart from a gateway that answered.
+                    error_type = (
+                        DeviceConnectionError
+                        if isinstance(err, (asyncio.TimeoutError, DeviceConnectionError))
+                        else DeviceException
+                    )
+                    raise error_type(
+                        f"XMPP request error for {path} after 2 attempts: {err}"
+                    ) from err
             except EncryptionException as err:
                 # Never leaves the connector: callers guard against DeviceException.
                 raise DeviceException(f"Can't decrypt response for {path}: {err}") from err
@@ -277,7 +292,7 @@ class XMPPBaseConnector:
                 _LOGGER.error(
                     "Can't connect to XMPP server!. Check your network connection or credentials!"
                 )
-                raise DeviceException("XMPP connection timeout")
+                raise DeviceConnectionError("XMPP connection timeout")
 
             # Use sequence number as the unique key for this request
             seq_no = self._count
@@ -304,11 +319,11 @@ class XMPPBaseConnector:
                 raise DeviceException(f"IqError: {e}")
             except IqTimeout:
                 _LOGGER.error("IqTimeout sending message")
-                raise DeviceException("IqTimeout")
+                raise DeviceConnectionError("IqTimeout")
             except asyncio.TimeoutError:
                 self._last_timeout_seq = seq_no
                 _LOGGER.debug("Timeout waiting for response from %s (Seq: %d)", path, seq_no)
-                raise MsgException("Request timed out")
+                raise MsgConnectionError("Request timed out")
 
             except MsgException as err:
                 _LOGGER.debug("Msg exception for %s: %s", path, err)

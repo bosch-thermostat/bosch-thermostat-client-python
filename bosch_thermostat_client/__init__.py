@@ -7,6 +7,7 @@ from .exceptions import (
     FirmwareException,
     ResponseException,
     EncryptionException,
+    MsgConnectionError,
     MsgException,
     UnknownDevice,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "ResponseException",
     "EncryptionException",
     "FirmwareException",
+    "MsgConnectionError",
     "MsgException",
     "UnknownDevice",
 ]

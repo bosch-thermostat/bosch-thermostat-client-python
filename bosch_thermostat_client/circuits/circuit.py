@@ -297,6 +297,12 @@ class Circuit(BasicCircuit):
                 result = await self._connector.get(item[URI])
                 self.process_results(result, key)
                 return result
+            except DeviceConnectionError:
+                # The gateway was unreachable. Consumers need to see this so
+                # they can mark entities unavailable, the same way
+                # Sensor.update() and update_requested_key do.
+                self._state = False
+                raise
             except DeviceException as err:
                 _LOGGER.debug(
                     "Suppressed %s in error update flow for %s: %s",

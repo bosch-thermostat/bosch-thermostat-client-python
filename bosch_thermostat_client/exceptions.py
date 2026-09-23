@@ -33,6 +33,17 @@ class MsgException(DeviceException):
     pass
 
 
+class MsgConnectionError(MsgException, DeviceConnectionError):
+    """A message failed because the connection timed out or dropped.
+
+    Both parents on purpose: callers retrying on MsgException keep working,
+    and a consumer asking "was the device unreachable?" via
+    DeviceConnectionError gets the same answer it gets from the HTTP
+    connector. A gateway that answers 4xx raises plain MsgException - that is
+    a response, not a transport failure.
+    """
+
+
 class FirmwareException(BoschException):
     """Unsupported firmware version.
 
