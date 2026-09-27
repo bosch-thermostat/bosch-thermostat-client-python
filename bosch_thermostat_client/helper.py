@@ -47,7 +47,22 @@ CONFIDENTIAL_URI = (
     "/gateway/serialnumber",
     "/gateway/remoteServicesPassword",
     "/gateway/identificationKey",
+    "/ecus/rrc/personaldetails",
+    "/ecus/rrc/installerdetails",
+    "/ecus/rrc/registrationdetails",
+    "/system/appliance/serialnumber",
+    "/system/location/latitude",
+    "/system/location/longitude",
 )
+# Presence detection profiles are named after the people living in the house.
+CONFIDENTIAL_URI_REGEX = re.compile(
+    r"^/ecus/rrc/homeentrancedetection/userprofile\d+/name$"
+)
+
+
+def is_confidential(uri: str) -> bool:
+    """Tell if a raw scan must hide the value of this URI."""
+    return uri in CONFIDENTIAL_URI or bool(CONFIDENTIAL_URI_REGEX.match(uri))
 
 #: Confidential keys that live *inside* a value which is a list of dicts, such
 #: as /devices/dev*. Blanking the whole value would destroy the structure the
@@ -138,7 +153,7 @@ async def deep_into(url, _list, get):
                     _list.append(ivs_resp)
                 except (DeviceException, EncryptionException):
                     pass
-        if ID in new_resp and new_resp[ID] in CONFIDENTIAL_URI:
+        if ID in new_resp and is_confidential(new_resp[ID]):
             new_resp[VALUE] = "-1"
             if ALLOWED_VALUES in new_resp:
                 new_resp[ALLOWED_VALUES] = ["-1"]
