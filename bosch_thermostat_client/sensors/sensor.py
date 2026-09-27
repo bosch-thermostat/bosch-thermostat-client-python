@@ -50,6 +50,18 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
         else:
             self._data = {attr_id: {RESULT: {}, URI: path, TYPE: kind}}
         self._missing_endpoint_warning_counts: dict[str, int] = {}
+        # Some endpoints return an object as value (e.g. /ecus/rrc/uiStatus).
+        # value_key picks the single field the sensor reports.
+        self._value_key: str | None = kwargs.get("value_key")
+
+    def _select_value(self, result):
+        """Reduce an object value to the field named by value_key."""
+        if not self._value_key or not isinstance(result, dict):
+            return result
+        value = result.get(VALUE)
+        if not isinstance(value, dict):
+            return result
+        return {**result, VALUE: value.get(self._value_key)}
 
     @staticmethod
     def _is_missing_endpoint_error(error: Exception) -> bool:
@@ -93,7 +105,7 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
         item = self._data[self._main_data[ID]]
         if item[TYPE] in self._allowed_types:
             try:
-                result = await self._connector.get(item[URI])
+                result = self._select_value(await self._connector.get(item[URI]))
                 self.process_results(result=result, key=self._main_data[ID])
                 self._state = True
             except DeviceConnectionError:

@@ -252,7 +252,17 @@
     "notifications": {
       "id": "/system/appliance/displaycode",
       "cause": "/system/appliance/causecode",
+      "type": "notification",
       "name": "Notifications"
+    },
+    "boiler_indicator": {
+      "id": "/ecus/rrc/uiStatus",
+      "value_key": "BAI",
+      "name": "Boiler indicator"
+    },
+    "boiler_status_code": {
+      "id": "/system/appliance/causecode",
+      "name": "Boiler status code"
     },
     "ecus_recording": {
       "name": "Gas usage",
