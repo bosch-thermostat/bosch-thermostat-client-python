@@ -37,8 +37,7 @@ async def set_operation_mode(gateway, c_index, circ_type=HC):
     mode = "auto" if circ.ha_mode == "heat" else "heat"
     await circ.set_ha_mode(mode)
 
-
-async def test_circ(gateway, circ_type=HC):
+async def run_circ_test(gateway, circ_type=HC):
     print(f"=================={circ_type}==================")
     await circuits_init(gateway, circ_type)
     await circuits_read_temp(gateway, 0, circ_type)
@@ -58,8 +57,10 @@ async def main():
             access_token="ABCdEFGHIJHKL2MN",
             password="abcdef12",
         )
-        # 1. Check if auto mode.
-        # 2. Adjust temperature by half 0.5 C
+        await gateway.initialize()
+        await run_circ_test(gateway, HC)
+        await run_circ_test(gateway, DHW)
+
         # 3. Wait 60s.
         # 4. Switch to manual mode
         # 5. Wait 60s
@@ -73,6 +74,7 @@ async def main():
         return
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 
 # asyncio.get_event_loop().run_until_complete(main())

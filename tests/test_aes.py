@@ -1,19 +1,10 @@
-import pytest
 import unittest
-
-pytest.skip(
-    "Written against the removed generic Encryption class; encryption is now split "
-    "into IVTEncryption / NefitEncryption / EasycontrolEncryption. Needs a decision "
-    "on which variant these AES vectors belong to before it can be restored.",
-    allow_module_level=True,
-)
-
-from bosch_thermostat_client.encryption import Encryption  # noqa: E402
+from bosch_thermostat_client.encryption import IVTEncryption as Encryption
 
 
 class AesTest(unittest.TestCase):
 
-    def setup(self):
+    def setUp(self):
         self.client = Encryption('abc1abc2abc3abc4', 'passworddddd')
 
     # encrypt and decrypt a string

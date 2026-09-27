@@ -47,7 +47,6 @@ class NotificationSensor(Sensor):
         if result:
             vals = result.get(VALUE, [])
             if vals:
-                print("vals", vals)
                 data[RESULT] = {}
                 for idx, val in enumerate(vals):
                     if "ccd" in val:

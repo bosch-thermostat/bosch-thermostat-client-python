@@ -58,7 +58,7 @@ def set_debug(debug: int) -> None:
     logging.getLogger("slixmpp.stringprep").setLevel(logging.ERROR)
 
 
-def set_default(ctx, param, value):
+def set_default(ctx, _param, value):
     if os.path.exists(value):
         with open(value, "r") as f:
             config = load(f.read(), Loader=Loader)
@@ -113,8 +113,10 @@ async def _runpush(gateway, path, value):
     try:
         if value.isnumeric():
             _value = int(value)
-        _value = float(value)
-    except ValueError:
+        elif value:
+            _value = float(value)
+    except ValueError as err:
+        _LOGGER.debug("Suppressed ValueError in _runpush for %s: %s", path, err)
         _value = value
     _LOGGER.debug("Trying to connect to gateway.")
     result = await gateway.raw_put(path, _value)
@@ -261,7 +263,7 @@ async def scan(
         return
     session_type = protocol.upper()
     if session_type == XMPP:
-        session = asyncio.get_event_loop()
+        session = asyncio.get_running_loop()
     elif session_type == HTTP:
         session = aiohttp.ClientSession()
         if device.upper() != IVT:
@@ -329,7 +331,7 @@ async def query(
     session_type = protocol.upper()
     _LOGGER.info("Connecting to %s with '%s'", host, session_type)
     if session_type == XMPP:
-        session = asyncio.get_event_loop()
+        session = asyncio.get_running_loop()
     elif session_type == HTTP:
         session = aiohttp.ClientSession()
         if device.upper() != IVT:
@@ -392,8 +394,7 @@ async def put(
     if not value:
         _LOGGER.error("Value to put not provided. Exiting")
         return
-    if value.isnumeric():
-        value = float(value)
+    # value remains a string; _runpush() handles int/float/str detection
     if device.upper() in (NEFIT, IVT, EASYCONTROL):
         BoschGateway = bosch.gateway_chooser(device_type=device)
     else:
@@ -402,7 +403,7 @@ async def put(
     session_type = protocol.upper()
     _LOGGER.info("Connecting to %s with '%s'", host, session_type)
     if session_type == XMPP:
-        session = asyncio.get_event_loop()
+        session = asyncio.get_running_loop()
     elif session_type == HTTP:
         session = aiohttp.ClientSession()
         if device.upper() != IVT:
@@ -426,4 +427,4 @@ async def put(
 
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(cli())
+    asyncio.run(cli())
