@@ -5,7 +5,7 @@ import logging
 import json
 import os
 
-from bosch_thermostat_client.const import DEFAULT, FIRMWARE_VERSION
+from bosch_thermostat_client.const import DEFAULT, FIRMWARE_VERSION, POINTTAPI
 from bosch_thermostat_client.const.nefit import NEFIT
 from bosch_thermostat_client.const.ivt import (
     CAN,
@@ -28,6 +28,7 @@ DEVICE_TYPES = {
     NEFIT: "nefit/{}.json",
     NSC_ICOM_GATEWAY: "nsc_icom_gateway/{}.json",
     EASYCONTROL: "easycontrol/{}.json",
+    POINTTAPI: "pointtapi/{}.json",
 }
 
 
@@ -57,9 +58,7 @@ async def get_db_of_firmware(device_type, firmware_version):
     if not firmware_version:
         _LOGGER.error("Can't find your fw version.")
         return None
-    filename = DEVICE_TYPES[device_type].format(
-        firmware_version.replace(".", "")
-    )
+    filename = DEVICE_TYPES[device_type].format(firmware_version.replace(".", ""))
     filepath = os.path.join(MAINPATH, filename)
     _LOGGER.debug("Attempt to load database from file %s", filepath)
     _db = await async_open_json(filepath)
@@ -96,5 +95,7 @@ async def async_get_errors(device_type) -> dict:
     elif device_type == NEFIT:
         return await asyncio.to_thread(get_nefit_errors)
     elif device_type == IVT:
-        return (await asyncio.to_thread(get_nefit_errors)) | (await asyncio.to_thread(get_ivt_errors))
+        return (await asyncio.to_thread(get_nefit_errors)) | (
+            await asyncio.to_thread(get_ivt_errors)
+        )
     return {}
