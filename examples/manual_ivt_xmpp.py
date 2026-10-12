@@ -1,11 +1,12 @@
 """Manual test script of bosch_thermostat_client Nefit connection with HTTP endpoint. """
+
 import asyncio
 import logging
-import aiohttp
+from datetime import datetime, timedelta
 import time
 import bosch_thermostat_client as bosch
 from bosch_thermostat_client.const.ivt import IVT
-from bosch_thermostat_client.const import HC, HTTP, DHW
+from bosch_thermostat_client.const import HC, XMPP, DHW
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.WARN)
@@ -52,47 +53,31 @@ async def set_operation_mode(gateway, c_index, circ_type=HC):
 async def main():
     """"""
     BoschGateway = bosch.gateway_chooser(device_type=IVT)
-    async with aiohttp.ClientSession() as session:
-        gateway = BoschGateway(
-            session=session,
-            session_type=HTTP,
-            host="127.0.0.1:8080",
-            access_token="ABCdEFGHIJHKL2MN",
-            password="abcdef12",
-        )
-        await gateway.initialize()
-        await hc_circuits_init(gateway)
-        await dhw_circuits_init(gateway)
-        await dhw_circuit_test(gateway)
-        return
-
-        await hc_circuits_read_temp(gateway, 0, HC)
-        await get_operation_mode(gateway, 0, HC)
-        await set_operation_mode(gateway, 0, HC)
-        return
-    # return
-    print(f"UUID {await gateway.check_connection()}")
-
-    small = await gateway.smallscan(HC)
-    # myjson = json.loads(small)
-    print(small)
-    return
-    sensors = gateway.initialize_sensors()
-    for sensor in sensors:
-        await sensor.update()
-    for sensor in sensors:
-        print(f"{sensor.name} : {sensor.state}")
+    gateway = BoschGateway(
+        session=None,
+        session_type=XMPP,
+        host="aaa",
+        access_token="a",
+        password="a",
+    )
+    await gateway.initialize()
     await gateway.get_capabilities()
-    for hc in gateway.heating_circuits:
-        await hc.update()
-        print("hvac mode", hc.ha_mode)
-        print("target temp ->", hc.target_temperature)
-    return
+    sensors = gateway.sensors
+
+    def find_ch_rec():
+        for sensor in sensors:
+            if sensor.name == "ractualCHPower":
+                return sensor
+
+    recording_sensor = find_ch_rec()
+    start = datetime.fromisoformat("2024-03-27T00:00:00+01:00")
+    stop = datetime.fromisoformat("2024-03-29T22:06:24+01:00")
+    range = await recording_sensor.fetch_range(start, stop)
+    print(range)
 
     #        await hc.set_ha_mode("auto") #MEANS AUTO
     #       await hc.update()
     # time.sleep(4)
-    await dhw.set_temperature(53.0)
     # return
     # return
     # await dhw.set_ha_mode("performance") #MEANS MANUAL
@@ -148,6 +133,7 @@ async def main():
     await loop.close()
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 
 # asyncio.get_event_loop().run_until_complete(main())

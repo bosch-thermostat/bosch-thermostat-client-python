@@ -1,10 +1,10 @@
 import unittest
-from bosch_thermostat_client.encryption import Encryption
+from bosch_thermostat_client.encryption import IVTEncryption as Encryption
 
 
 class AesTest(unittest.TestCase):
 
-    def setup(self):
+    def setUp(self):
         self.client = Encryption('abc1abc2abc3abc4', 'passworddddd')
 
     # encrypt and decrypt a string

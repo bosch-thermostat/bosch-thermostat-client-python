@@ -1,4 +1,3 @@
-from errno import errorcode
 from bosch_thermostat_client.db import get_nefit_errors
 from .sensor import Sensor
 from bosch_thermostat_client.const import (

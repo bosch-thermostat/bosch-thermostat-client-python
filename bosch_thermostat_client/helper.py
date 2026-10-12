@@ -49,6 +49,26 @@ CONFIDENTIAL_URI = (
     "/gateway/identificationKey",
 )
 
+#: Confidential keys that live *inside* a value which is a list of dicts, such
+#: as /devices/dev*. Blanking the whole value would destroy the structure the
+#: scan is taken for, so these are masked per key.
+CONFIDENTIAL_KEYS = (
+    "sgtin",  # per-device factory serial number
+    "dlk",  # HomematicIP link key - the pairing secret
+)
+
+
+def mask_confidential_keys(value):
+    """Blank confidential keys inside a value, keeping its shape."""
+    if isinstance(value, list):
+        return [mask_confidential_keys(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: ("-1" if key in CONFIDENTIAL_KEYS else mask_confidential_keys(item))
+            for key, item in value.items()
+        }
+    return value
+
 
 def isBase64(s):
     try:
@@ -122,6 +142,8 @@ async def deep_into(url, _list, get):
             new_resp[VALUE] = "-1"
             if ALLOWED_VALUES in new_resp:
                 new_resp[ALLOWED_VALUES] = ["-1"]
+        elif VALUE in new_resp:
+            new_resp[VALUE] = mask_confidential_keys(new_resp[VALUE])
         if "setpointProperty" in new_resp and URI in new_resp["setpointProperty"]:
             new_resp["setpointProperty"][URI] = remove_all_ip_occurs(
                 new_resp["setpointProperty"][URI]
@@ -280,6 +302,13 @@ class BoschSingleEntity:
                     result = await self._connector.get(item[URI])
                     self.process_results(result=result, key=key)
                     state = True
+                except DeviceConnectionError:
+                    # Backs every switch type. The gateway was unreachable, so
+                    # the consumer has to hear about it rather than see a
+                    # switch silently keep its last state.
+                    self._state = False
+                    self._extra_message = f"Can't update data. Error: {self.name}"
+                    raise
                 except DeviceException as err:
                     _LOGGER.warning(
                         f"Can't update data for {self.name}. Trying uri: {item[URI]}. Error message: {err}"

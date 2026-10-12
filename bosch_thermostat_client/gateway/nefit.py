@@ -40,6 +40,7 @@ class NefitGateway(BaseGateway):
         access_key=None,
         password=None,
         session=None,
+        ssl_context=None,
     ):
         """
         Initialize gateway.
@@ -64,6 +65,7 @@ class NefitGateway(BaseGateway):
             access_key=self._access_token,
             encryption=Encryption(access_key, password),
             device_type=NEFIT,
+            ssl_context=ssl_context,
         )
         self._session_type = session_type
         self._data = {GATEWAY: {}, HC: None, DHW: None, SENSORS: None}

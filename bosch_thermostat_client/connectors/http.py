@@ -74,6 +74,10 @@ class HttpConnector:
         """Set timeout for API calls."""
         self._request_timeout = timeout
 
+    async def request(self, path):
+        """Request message from API with given path. Backward compatibility for tests."""
+        return await self.get(path)
+
     async def get(self, path):
         """Get message from API with given path."""
         async with self._lock:

@@ -14,7 +14,7 @@ from bosch_thermostat_client.const import (
 from .sensor import Sensor
 from bosch_thermostat_client.exceptions import DeviceException
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,10 +76,16 @@ class RecordingSensor(Sensor):
         self, start_time: datetime, stop_time: datetime
     ) -> dict:
         async with self._lock:
+            # Only the range asked for. Keeping the accumulated dict here made
+            # every call return the previous calls' rows as well, which
+            # double-counted energy for a caller fetching in chunks.
+            self._past_data = {}
             current_date = start_time
             while current_date < stop_time:
                 uri = self.build_uri(time=current_date)
+                _LOGGER.debug("Requesting statistics for %s", uri)
                 data = await self._connector.get(uri)
+                _LOGGER.debug("Response for statistics %s: %s", uri, data)
                 if not data:
                     continue
                 if RECORDING in data:
@@ -111,17 +117,20 @@ class RecordingSensor(Sensor):
         interval = time.strftime("%Y-%m-%d")
         return f"{self._data[self.attr_id][URI]}?{INTERVAL}={interval}"
 
-    async def update(self, time: datetime = datetime.utcnow()) -> None:
+    async def update(self, time: datetime | None = None) -> None:
         """Update info about Recording Sensor asynchronously."""
+        if time is None:
+            time = datetime.now(timezone.utc)
         try:
             if time.hour < 1:
                 time = time - timedelta(hours=12)
             uri = self.build_uri(time)
+            _LOGGER.debug("Requesting statistics for %s", uri)
             result = await self._connector.get(uri)
-            _LOGGER.debug("Fetching uri for recording sensor %s", uri)
+            _LOGGER.debug("Response for statistics %s: %s", uri, result)
             self.process_results(result, time)
         except DeviceException as err:
             _LOGGER.error(
-                f"Can't update data for {self.name}. Trying uri: {self._data[URI]}. Error message: {err}"
+                f"Can't update data for {self.name}. Trying uri: {self._data[self.attr_id][URI]}. Error message: {err}"
             )
             self._extra_message = f"Can't update data. Error: {err}"

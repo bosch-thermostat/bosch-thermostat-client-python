@@ -32,7 +32,6 @@ ENERGY = "energy"
 
 
 def get_sensor_class(device_type, sensor_type):
-    print("de", device_type, sensor_type)
     if device_type == IVT:
         from .notification_ivt import NotificationSensor
     elif device_type == EASYCONTROL:
@@ -92,7 +91,6 @@ class Sensors(BoschEntities):
                 SensorClass = get_sensor_class(
                     device_type=connector.device_type, sensor_type=sensor_id
                 )
-                print("sensr", SensorClass)
                 self._items[sensor_id] = SensorClass(
                     **kwargs,
                 )

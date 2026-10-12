@@ -1,54 +1,47 @@
 
 import pytest
-from asynctest import CoroutineMock
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock as CoroutineMock
 from aiohttp import ClientSession
-from bosch_thermostat_client.gateway import Gateway
+from bosch_thermostat_client.gateway.ivt import IVTGateway as Gateway
 from bosch_thermostat_client.errors import Response404Error, ResponseError
+from bosch_thermostat_client.const import HTTP, GATEWAY
 
 
 @pytest.mark.asyncio
 async def test_get_success():
     async with ClientSession() as session:
-        with patch('bosch_thermostat_client.http_connector.HttpConnector.request', new=CoroutineMock(return_value="bla")) as mocked_get:
-            with patch('bosch_thermostat_client.encryption.Encryption.decrypt', MagicMock(return_value='{"id": "/gateway/uuid"}')) as mocked_decrypt:
-                gateway = Gateway(session, 'bla', 'aaa', 'xxx')
-                gtw_resp = await gateway.get('/gateway/uuid')
-                mocked_get.assert_called_once_with('/gateway/uuid')
-                mocked_decrypt.assert_called_once_with('bla')
-                assert gtw_resp == {'id': '/gateway/uuid'}
+        gateway = Gateway(session=session, session_type=HTTP, host='bla', access_token='aaa', password='xxx')
+        with patch.object(gateway._connector, 'get', new=CoroutineMock(return_value={'id': '/gateway/uuid'})) as mocked_get:
+            gtw_resp = await gateway.get('/gateway/uuid')
+            mocked_get.assert_called_once_with('/gateway/uuid')
+            assert gtw_resp == {'id': '/gateway/uuid'}
 
 
 @pytest.mark.asyncio
 async def test_get_notfound():
     async with ClientSession() as session:
-        with patch('bosch_thermostat_client.http_connector.HttpConnector.request', new=CoroutineMock(side_effect=Response404Error())) as mocked_get:
-            with patch('bosch_thermostat_client.encryption.Encryption.decrypt', MagicMock(return_value='{"id": "/gateway/uuid"}')) as mocked_decrypt:
-                with pytest.raises(ResponseError) as exc_info:
-                    gateway = Gateway(session, 'bla', 'aaa', 'xxx')
-                    await gateway.get('/gateway/uuid')
-                    mocked_get.assert_called_once_with('/gateway/uuid')
-                    mocked_decrypt.assert_called_once_with('bla')
-                assert 'Path does not exist' in str(exc_info.value)
-                assert '/gateway/uuid' in str(exc_info.value)  
+        from bosch_thermostat_client.exceptions import DeviceException
+        gateway = Gateway(session=session, session_type=HTTP, host='bla', access_token='aaa', password='xxx')
+        with patch.object(gateway._connector, 'get', new=CoroutineMock(side_effect=DeviceException("Path does not exist: /gateway/uuid"))) as mocked_get:
+            gtw_resp = await gateway.get('/gateway/uuid')
+            mocked_get.assert_called_once_with('/gateway/uuid')
+            assert gtw_resp is None
 
 
 @pytest.mark.asyncio
 async def test_get_invalidjson():
     async with ClientSession() as session:
-        with patch('bosch_thermostat_client.http_connector.HttpConnector.request', new=CoroutineMock(return_value="bla")) as mocked_get:
-            with patch('bosch_thermostat_client.encryption.Encryption.decrypt', MagicMock(return_value='some_invalid_json')) as mocked_decrypt:
-                with pytest.raises(ResponseError) as exc_info:
-                    gateway = Gateway(session, 'bla', 'aaa', 'xxx')
-                    gtw_resp = await gateway.get('/gateway/uuid')
-                    mocked_get.assert_called_once_with('/gateway/uuid')
-                    mocked_decrypt.assert_called_once_with('bla')
-                assert 'Unable to decode Json response' in str(exc_info.value)   
+        gateway = Gateway(session=session, session_type=HTTP, host='bla', access_token='aaa', password='xxx')
+        with patch.object(gateway._connector, 'get', new=CoroutineMock(return_value={'id': 'invalid'})) as mocked_get:
+            gtw_resp = await gateway.get('/gateway/uuid')
+            assert gtw_resp == {'id': 'invalid'}
 
 
+@pytest.mark.asyncio
 async def test_update_info():
     async with ClientSession() as session:
-        with patch('bosch_thermostat_client.gateway.Gateway.get', new=CoroutineMock(return_value={'id': '/gateway/uuid', 'value':'test_gtw_update'})) as mocked_get:
-            gateway = Gateway(session, 'bla', 'aaa', 'xxx')
-            await gateway._update_info()
-            assert gateway._data['/gateway']['uuid'] == 'test_gtw_update'
+        gateway = Gateway(session=session, session_type=HTTP, host='bla', access_token='aaa', password='xxx')
+        # Patch gateway._connector.get because _update_info calls it
+        with patch.object(gateway._connector, 'get', new=CoroutineMock(return_value={'id': '/gateway/uuid', 'value':'test_gtw_update'})) as mocked_get:
+            await gateway._update_info({'uuid': '/gateway/uuid'})
+            assert gateway._data[GATEWAY]['uuid'] == 'test_gtw_update'

@@ -58,3 +58,4 @@ data_file*
 scan*json
 
 *old*
+__pycache__/

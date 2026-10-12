@@ -22,7 +22,7 @@ class DeviceConnectionError(DeviceException):
     """HTTP request failed before a complete response was received."""
 
 
-class MsgException(BoschException):
+class MsgException(DeviceException):
     """
     Invalid request.
 
@@ -33,28 +33,42 @@ class MsgException(BoschException):
     pass
 
 
-class FirmwareException(BoschException):
-    """
-    Wrong firmware version.
+class MsgConnectionError(MsgException, DeviceConnectionError):
+    """A message failed because the connection timed out or dropped.
 
-    Unable to fulfill request.
-    Raised when host or API cannot be reached.
+    Both parents on purpose: callers retrying on MsgException keep working,
+    and a consumer asking "was the device unreachable?" via
+    DeviceConnectionError gets the same answer it gets from the HTTP
+    connector. A gateway that answers 4xx raises plain MsgException - that is
+    a response, not a transport failure.
+    """
+
+
+class FirmwareException(BoschException):
+    """Unsupported firmware version.
+
+    Deliberately NOT a DeviceException: it describes the device, not a failed
+    request, and consumers handle it separately from transport errors.
     """
 
     pass
 
 
 class FailedAuthException(BoschException):
-    """Failed auth."""
+    """Failed auth.
+
+    Deliberately NOT a DeviceException: consumers catch DeviceException around
+    updates and discovery, and a wrong access key has to reach them so they can
+    ask for credentials again instead of retrying forever.
+    """
     pass
 
 
 class UnknownDevice(BoschException):
-    """
-    Unknown device.
+    """Device model is not in the database.
 
-    Unable to fulfill request.
-    Raised when host or API cannot be reached.
+    Deliberately NOT a DeviceException, for the same reason as
+    FirmwareException.
     """
 
     pass

@@ -8,7 +8,7 @@ from bosch_thermostat_client.const.easycontrol import PAGINATION
 from .sensor import Sensor
 from bosch_thermostat_client.exceptions import DeviceException
 
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,8 +84,10 @@ class EcusRecordingSensor(Sensor):
             return int(self._page_number)
         return -1
 
-    async def update(self, time=None):
+    async def update(self, time: datetime | None = None):
         """Update info about Recording Sensor asynchronously."""
+        if time is None:
+            time = datetime.now(timezone.utc)
         try:
             pagination = await self._connector.get(self._pagination_uri)
             _page = pagination.get(VALUE, self._page_number)
@@ -101,6 +103,6 @@ class EcusRecordingSensor(Sensor):
                     self.process_results(result, time)
         except DeviceException as err:
             _LOGGER.error(
-                f"Can't update data for {self.name}. Trying uri: {self._data[URI]}. Error message: {err}"
+                f"Can't update data for {self.name}. Trying uri: {self._data[self.attr_id][URI]}. Error message: {err}"
             )
             self._extra_message = f"Can't update data. Error: {err}"

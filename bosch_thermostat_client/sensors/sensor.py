@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from bosch_thermostat_client.exceptions import DeviceException
+from bosch_thermostat_client.exceptions import DeviceConnectionError, DeviceException
 from bosch_thermostat_client.helper import BoschSingleEntity, DeviceClassEntity
 from bosch_thermostat_client.const import ID, RESULT, URI, TYPE, REGULAR, VALUE
 from bosch_thermostat_client.const.ivt import INVALID
@@ -96,6 +96,12 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
                 result = await self._connector.get(item[URI])
                 self.process_results(result=result, key=self._main_data[ID])
                 self._state = True
+            except DeviceConnectionError:
+                # The gateway could not be reached at all. Consumers need to
+                # see this so they can mark entities unavailable instead of
+                # keeping a stale value.
+                self._state = False
+                raise
             except DeviceException as err:
                 self._log_sensor_update_error(item[URI], err)
                 self._extra_message = f"Can't update data. Error: {err}"
