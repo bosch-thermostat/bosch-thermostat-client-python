@@ -8,8 +8,12 @@ from bosch_thermostat_client.const.ivt import INVALID
 _LOGGER = logging.getLogger(__name__)
 
 MISSING_ENDPOINT_ERROR_MARKERS = (
+    # HTTP connector.
     "doesn not exist: 404",
     "does not exist: 404",
+    # XMPP connector: "<status line> for <path>: <body>".
+    "HTTP/1.0 404",
+    "HTTP/1.1 404",
 )
 MISSING_ENDPOINT_WARNING_INTERVAL = 60
 

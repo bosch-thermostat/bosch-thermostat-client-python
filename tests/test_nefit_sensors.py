@@ -1,13 +1,18 @@
 """NEFIT sensors must actually poll their endpoints."""
 
+import asyncio
 import json
+import logging
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from bosch_thermostat_client.connectors.nefit import NefitConnector
+from bosch_thermostat_client.connectors.xmpp import _PendingRequest
 from bosch_thermostat_client.const.nefit import NEFIT
 from bosch_thermostat_client.sensors import Sensors
+from bosch_thermostat_client.sensors.sensor import MISSING_ENDPOINT_WARNING_INTERVAL
 
 DB_DIR = Path(__file__).resolve().parents[1] / "bosch_thermostat_client" / "db"
 NEFIT_DBS = sorted((DB_DIR / "nefit").glob("*.json"))
@@ -108,6 +113,62 @@ class NefitBoilerStatusCodeTests(unittest.IsolatedAsyncioTestCase):
                 await sensors["boiler_status_code"].update()
                 connector.get.assert_awaited_once_with("/system/appliance/causecode")
                 self.assertEqual(sensors["boiler_status_code"].state, code)
+
+
+class NefitDatabaseTests(unittest.TestCase):
+    def test_every_nefit_database_has_the_boiler_sensors(self):
+        for db_file in NEFIT_DBS:
+            with self.subTest(db=db_file.name):
+                _, sensors = nefit_sensors({}, db_file=db_file.name)
+                self.assertIn("boiler_indicator", sensors)
+                self.assertIn("boiler_status_code", sensors)
+
+
+def xmpp_connector_answering_404():
+    """A real NEFIT connector whose gateway answers every GET with a 404."""
+    with patch(
+        "bosch_thermostat_client.connectors.xmpp.BoschClientXMPP",
+        return_value=MagicMock(plugin={}),
+    ):
+        connector = NefitConnector(
+            host="SERIAL", encryption=MagicMock(), access_key="ACCESSKEY"
+        )
+
+    async def request(method, path, data=None):
+        future = asyncio.get_running_loop().create_future()
+        connector._pending = {
+            0: _PendingRequest(future=future, method=method, path=path)
+        }
+        connector.main_listener(
+            {"type": "chat", "body": "HTTP/1.0 404 Not Found\r\rSeq-No: 0\r\r"}
+        )
+        return await future
+
+    connector._request = request
+    return connector
+
+
+class NefitMissingEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def test_xmpp_404_is_throttled(self):
+        connector = xmpp_connector_answering_404()
+        sensors = Sensors(
+            connector=connector,
+            sensors_db=load_json(DB_DIR / "nefit" / "021802.json")["sensors"],
+            errors=load_json(DB_DIR / "errorcodes_nefit.json"),
+        )
+        indicator = next(s for s in sensors if s.attr_id == "boiler_indicator")
+
+        with self.assertLogs("bosch_thermostat_client", level=logging.DEBUG) as logs:
+            for _ in range(MISSING_ENDPOINT_WARNING_INTERVAL + 1):
+                await indicator.update()
+
+        warnings = [r for r in logs.records if r.levelno >= logging.WARNING]
+        # One warning on the first poll, one more after the interval, and
+        # nothing from the connector itself.
+        self.assertEqual(len(warnings), 2)
+        self.assertTrue(all(r.name.endswith("sensors.sensor") for r in warnings))
+        self.assertIn("HTTP/1.0 404", warnings[0].getMessage())
+        self.assertEqual(indicator.state, "unavailable")
 
 
 if __name__ == "__main__":

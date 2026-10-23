@@ -42,6 +42,7 @@ _LINE_SPLIT = re.compile(r"\r\r|\r\n|\n|\r")
 _HEADER_LINE = re.compile(r"^[A-Za-z][A-Za-z0-9-]*:")
 _STATUS_2XX = re.compile(r"HTTP/1\.[0-1] 2\d\d")
 _STATUS_ERROR = re.compile(r"HTTP/1\.[0-1] [45]\d\d")
+_STATUS_NOT_FOUND = re.compile(r"HTTP/1\.[0-1] 404\b")
 
 
 @dataclass
@@ -233,6 +234,13 @@ class XMPPBaseConnector:
                 if attempt == 1:
                     if "/devices" in path or "productLookup" in path:
                         _LOGGER.debug("XMPP request for %s failed after 2 attempts (expected for some models)", path)
+                    elif _STATUS_NOT_FOUND.match(str(err)):
+                        # The endpoint does not exist on this firmware. The
+                        # caller decides how loudly to report it.
+                        _LOGGER.debug(
+                            "XMPP request for %s failed after 2 attempts: not found",
+                            path,
+                        )
                     else:
                         _LOGGER.warning("XMPP request for %s failed after 2 attempts", path)
                     # Preserve "the device was unreachable" across the retry, so
