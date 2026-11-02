@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from bosch_thermostat_client.exceptions import DeviceConnectionError, DeviceException
 from bosch_thermostat_client.helper import BoschSingleEntity, DeviceClassEntity
-from bosch_thermostat_client.const import ID, RESULT, URI, TYPE, REGULAR, VALUE
+from bosch_thermostat_client.const import ID, RESULT, URI, TYPE, REGULAR, VALUE, UNITS
 from bosch_thermostat_client.const.ivt import INVALID
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,11 +48,18 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
         self._kind = kind
         self._device_class = device_class
         self._state_class = state_class
+        self._unit_of_measurement = (
+            kwargs.get(UNITS)
+            or kwargs.get("unit_of_measurement")
+            or kwargs.get("units")
+        )
         if data:
             data[attr_id] = {RESULT: {}, URI: path, TYPE: kind}
             self._data = data
         else:
             self._data = {attr_id: {RESULT: {}, URI: path, TYPE: kind}}
+        if self._unit_of_measurement:
+            self._data[attr_id][RESULT][UNITS] = self._unit_of_measurement
         self._missing_endpoint_warning_counts: dict[str, int] = {}
         # Some endpoints return an object as value (e.g. /ecus/rrc/uiStatus).
         # value_key picks the single field the sensor reports.
@@ -95,6 +102,23 @@ class Sensor(BoschSingleEntity, DeviceClassEntity):
     @property
     def kind(self) -> str:
         return self._kind
+
+    @property
+    def unit_of_measurement(self) -> str | None:
+        """Return the unit of measurement."""
+        result = self._data[self.attr_id].get(RESULT)
+        if result and result.get(UNITS):
+            return result.get(UNITS)
+        return self._unit_of_measurement
+
+    def process_results(self, result, key=None, return_data=False):
+        """Process results and ensure fallback unitOfMeasure is preserved."""
+        ret = super().process_results(result, key=key, return_data=return_data)
+        if self._unit_of_measurement:
+            data = ret if return_data else self._data[key or self.attr_id][RESULT]
+            if not data.get(UNITS):
+                data[UNITS] = self._unit_of_measurement
+        return ret
 
     @property
     def state(self) -> str:
