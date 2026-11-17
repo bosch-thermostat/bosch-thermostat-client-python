@@ -276,23 +276,36 @@
             "id": "/system/sensors/temperatures/outdoor_t1",
             "name": "Outdoor temperature",
             "state_class": "measurement",
-            "device_class": "temperature"
+            "device_class": "temperature",
+            "unitOfMeasure": "C"
         },
         "supply_t1_setpoint": {
             "id": "/system/sensors/temperatures/supply_t1_setpoint",
-            "name": "Supply temp setpoint"
+            "name": "Supply temp setpoint",
+            "state_class": "measurement",
+            "device_class": "temperature",
+            "unitOfMeasure": "C"
         },
         "supply_t1": {
             "id": "/system/sensors/temperatures/supply_t1",
-            "name": "Actual supply temp"
+            "name": "Actual supply temp",
+            "state_class": "measurement",
+            "device_class": "temperature",
+            "unitOfMeasure": "C"
         },
         "return": {
             "id": "/system/sensors/temperatures/return",
-            "name": "Return temp"
+            "name": "Return temp",
+            "state_class": "measurement",
+            "device_class": "temperature",
+            "unitOfMeasure": "C"
         },
         "switch": {
             "id": "/system/sensors/temperatures/switch",
-            "name": "Switch temp"
+            "name": "Switch temp",
+            "state_class": "measurement",
+            "device_class": "temperature",
+            "unitOfMeasure": "C"
         },
         "healthStatus": {
             "id": "/system/healthStatus",
@@ -300,11 +313,14 @@
         },
         "actualModulation": {
             "id": "/heatSources/actualModulation",
-            "name": "Actual modulation"
+            "name": "Actual modulation",
+            "state_class": "measurement",
+            "unitOfMeasure": "%"
         },
         "totalSystem": {
             "id": "/heatSources/workingTime/totalSystem",
-            "name": "Total system uptime"
+            "name": "Total system uptime",
+            "device_class": "duration"
         },
         "energyConsumption": {
             "id": "/heatSources/energyMonitoring/consumption",
@@ -318,7 +334,10 @@
         },
         "systemPressure": {
             "id": "/heatSources/systemPressure",
-            "name": "System pressure"
+            "name": "System pressure",
+            "state_class": "measurement",
+            "device_class": "pressure",
+            "unitOfMeasure": "bar"
         },
         "flameStatus": {
             "id": "/heatSources/flameStatus",
