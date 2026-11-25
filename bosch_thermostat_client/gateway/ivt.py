@@ -21,6 +21,7 @@ from bosch_thermostat_client.const.ivt import (
     IVT,
     IVT_MBLAN,
     SYSTEM_INFO,
+    VERSION_HARDWARE,
 )
 from bosch_thermostat_client.encryption import IVTEncryption as Encryption
 from bosch_thermostat_client.exceptions import DeviceConnectionError, DeviceException
@@ -91,7 +92,9 @@ class IVTGateway(BaseGateway):
         """Find device model."""
         system_bus = self._data[GATEWAY].get(SYSTEM_BUS)
         model_scheme = _db[MODELS]
-        if system_bus == CAN:
+        hardware = self._data[GATEWAY].get(VERSION_HARDWARE) or ""
+        # An older CAN gateway, iCom_low_CAN_v1 on 01.03.00, has no /system/bus.
+        if system_bus == CAN or (system_bus is None and f"_{CAN}_" in hardware):
             self._bus_type = CAN
             return model_scheme.get(CAN)
         self._bus_type = EMS
