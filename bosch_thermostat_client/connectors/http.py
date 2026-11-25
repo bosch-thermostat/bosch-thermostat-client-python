@@ -17,6 +17,11 @@ from bosch_thermostat_client.exceptions import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# An IVT gateway on firmware 01.03.00 leaves about one new connection in four
+# unanswered after a pause, and the next one in six: a GET that gets no answer is
+# tried again on a fresh connection. A PUT never is, so a command is never sent twice.
+GET_TRIES = 3
+
 
 class HttpConnector:
     """HTTP connector to Bosch thermostat."""
@@ -81,14 +86,27 @@ class HttpConnector:
     async def get(self, path):
         """Get message from API with given path."""
         async with self._lock:
-            data = await self._request(
-                self._websession.get,
-                path,
-                headers=HTTP_HEADER,
-                timeout=self._request_timeout,
-                skip_auto_headers=["Accept-Encoding", "Accept"],
-                raise_for_status=True,
-            )
+            for attempt in range(1, GET_TRIES + 1):
+                try:
+                    data = await self._request(
+                        self._websession.get,
+                        path,
+                        headers=HTTP_HEADER,
+                        timeout=self._request_timeout,
+                        skip_auto_headers=["Accept-Encoding", "Accept"],
+                        raise_for_status=True,
+                    )
+                    break
+                except DeviceConnectionError as err:
+                    timed_out = isinstance(err.__cause__, AsyncTimeout)
+                    if attempt == GET_TRIES or not timed_out:
+                        raise
+                    _LOGGER.debug(
+                        "No answer to GET %s, try %d of %d",
+                        path,
+                        attempt + 1,
+                        GET_TRIES,
+                    )
             _LOGGER.debug("Response to GET request %s: %s", path, json.dumps(data))
             return data
 
