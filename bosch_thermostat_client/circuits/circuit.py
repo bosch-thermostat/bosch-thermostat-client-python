@@ -126,7 +126,7 @@ class Circuit(BasicCircuit):
             self._op_mode = OperationModeHelper(
                 self.name, self._db.get(MODE_TO_SETPOINT)
             )
-        self._target_temp = 0
+        self._target_temp = None
 
     @property
     def support_target_temp(self):
@@ -246,6 +246,9 @@ class Circuit(BasicCircuit):
     @property
     def ha_mode(self):
         """Retrieve current mode in HA terminology."""
+        if self._op_mode.current_mode is None:
+            # Never read: a gateway that answered no mode said none, not off.
+            return None
         for v in self._hastates:
             for x in v[BOSCH_NAME]:
                 if x == self._op_mode.current_mode:
@@ -390,7 +393,7 @@ class CircuitWithSchedule(Circuit):
         target_temp = self.schedule.get_temp_for_current_mode()
         if target_temp == ACTIVE_PROGRAM:
             target_temp = self.get_value_from_active_setpoint(VALUE)
-        if target_temp >= 0:
+        if target_temp is not None and target_temp >= 0:
             self._target_temp = target_temp
         return self._target_temp
 
@@ -400,7 +403,8 @@ class CircuitWithSchedule(Circuit):
 
     def get_value_from_active_setpoint(self, prop_name):
         activeSetpointValue = self.get_property(self.active_program_setpoint)
-        default = 0
+        # A program with no setpoint has no target: none, not 0.
+        default = None
         if prop_name == MIN_VALUE:
             default = DEFAULT_MIN_TEMP
         elif prop_name == MAX_VALUE:
