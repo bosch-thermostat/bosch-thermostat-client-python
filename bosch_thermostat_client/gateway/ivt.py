@@ -58,6 +58,8 @@ class IVTGateway(BaseGateway):
         self._access_token = access_token.replace("-", "")
         if password:
             access_key = self._access_token
+        elif not access_key:
+            access_key = Encryption.key_without_password(self._access_token)
         Connector = connector_ivt_chooser(session_type)
         self._session_type = session_type
         self._connector = Connector(
