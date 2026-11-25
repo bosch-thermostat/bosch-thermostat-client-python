@@ -35,6 +35,12 @@ class BaseEncryption:
             self._saved_key = access_key
             self._key = binascii.unhexlify(self._saved_key)
 
+    @classmethod
+    def key_without_password(cls, access_key):
+        """Key of a gateway whose app password was never set: its access key's alone."""
+        key_hash = hashlib.md5(bytearray(access_key, "utf8") + cls.magic)
+        return key_hash.hexdigest() + hashlib.md5(cls.magic).hexdigest()
+
     @property
     def key(self):
         """Return key to store in config entry."""

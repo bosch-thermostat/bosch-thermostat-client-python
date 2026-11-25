@@ -1,0 +1,239 @@
+{
+    "versionFirmware": "01.03.00",
+    "date_format": "%Y-%m-%dT%H:%M:%S",
+    "heatingCircuits": {
+        "hastates": [
+            {
+                "haname": "off",
+                "boschname": [
+                    "heating_off"
+                ]
+            },
+            {
+                "haname": "heat",
+                "boschname": [
+                    "exception",
+                    "Program1"
+                ]
+            },
+            {
+                "haname": "heat_cool",
+                "boschname": [
+                    "normal",
+                    "Program2"
+                ]
+            },
+            {
+                "haname": "auto",
+                "boschname": [
+                    "HP_OPTIMIZED",
+                    "automatic"
+                ]
+            }
+        ],
+        "schedule": {
+            "program": "/heatingCircuits/{}/switchPrograms/{}",
+            "key_day": "dayOfWeek",
+            "key_setpoint": "setpoint",
+            "key_time": "time",
+            "switch_points": "switchPoints"
+        },
+        "mode_to_setpoint": {
+            "exception": {
+                "setpoint": "setpoint1",
+                "type": "manual"
+            },
+            "normal": {
+                "setpoint": "setpoint2",
+                "type": "manual"
+            },
+            "automatic": {
+                "setpoint": null,
+                "type": "auto"
+            },
+            "HP_OPTIMIZED": {
+                "setpoint": "setpoint2",
+                "type": "manual"
+            },
+            "Program1": {
+                "setpoint": null,
+                "type": "auto"
+            },
+            "Program2": {
+                "setpoint": null,
+                "type": "auto"
+            }
+        },
+        "min_ref": "current_temp",
+        "max_ref": "current_temp",
+        "refs": {
+            "current_temp": {
+                "id": "temperatureLevels/normal",
+                "name": "Room temperature",
+                "type": "regular"
+            },
+            "op2": {
+                "id": "activeSwitchProgram",
+                "name": "Operation mode",
+                "type": "operation_mode"
+            },
+            "setpoint1": {
+                "id": "temperatureLevels/exception",
+                "name": "Manual room setpoint",
+                "type": "setpoint"
+            },
+            "setpoint2": {
+                "id": "temperatureLevels/normal",
+                "name": "Temporary room setpoint",
+                "type": "setpoint"
+            },
+            "status": {
+                "id": "status",
+                "name": "Heating circuit status",
+                "type": "regular"
+            },
+            "activeProgram": {
+                "id": "activeSwitchProgram",
+                "name": "Active Switch Program",
+                "type": "activeProgram"
+            }
+        },
+        "sensors": {
+            "heatingCurveSettingPercentage": {
+                "id": "heatingCurveSetting/percentage",
+                "name": "Heating Curve Setting %"
+            },
+            "holidayModeActivated": {
+                "id": "holidayMode/activated",
+                "name": "Holiday Mode Activated"
+            },
+            "roomtemperature": {
+                "id": "roomtemperature",
+                "name": "Room temperature"
+            }
+        }
+    },
+    "dhwCircuits": {
+        "hastates": [
+            {
+                "haname": "off",
+                "boschname": [
+                    "Always_Off"
+                ]
+            },
+            {
+                "haname": "on",
+                "boschname": [
+                    "Always_On"
+                ]
+            },
+            {
+                "haname": "eco",
+                "boschname": [
+                    "eco"
+                ]
+            },
+            {
+                "haname": "performance",
+                "boschname": [
+                    "Automatic",
+                    "supersaver"
+                ]
+            },
+            {
+                "haname": "high_demand",
+                "boschname": [
+                    "comfort"
+                ]
+            }
+        ],
+        "min_ref": "current_temp",
+        "max_ref": "stop_value",
+        "schedule": {
+            "program": "/dhwCircuits/{}/dhwTimePrograms/{}",
+            "key_day": "dayOfWeek",
+            "key_setpoint": "setpoint",
+            "key_time": "time",
+            "switch_points": "switchPoints"
+        },
+        "mode_to_setpoint": {
+            "Automatic": {
+                "setpoint": null,
+                "type": "auto"
+            },
+            "Always_Off": {
+                "setpoint": null,
+                "type": "off"
+            },
+            "Always_On": {
+                "setpoint": "setpoint1",
+                "type": "manual"
+            },
+            "comfort": {
+                "setpoint": null,
+                "type": "auto"
+            },
+            "eco": {
+                "setpoint": null,
+                "type": "auto"
+            },
+            "supersaver": {
+                "setpoint": null,
+                "type": "auto"
+            }
+        },
+        "refs": {
+            "current_temp": {
+                "id": "actualTemp",
+                "name": "Room temperature",
+                "type": "regular"
+            },
+            "stop_value": {
+                "id": "actualTemp",
+                "name": "Room temperature",
+                "type": "regular"
+            },
+            "op1": {
+                "id": "operationMode",
+                "name": "Operation mode",
+                "type": "operation_mode"
+            },
+            "setpoint1": {
+                "id": "setTemperature",
+                "name": "DHW on level",
+                "type": "setpoint"
+            },
+            "status": {
+                "id": "extraDhw/status",
+                "name": "DHW status",
+                "type": "regular"
+            },
+            "activeProgram": {
+                "id": "activeDhwTimeProgram",
+                "name": "Active Switch Program",
+                "type": "activeProgram"
+            }
+        },
+        "sensors": {}
+    },
+    "sensors": {
+        "outdoor_t1": {
+            "id": "/system/sensors/outdoorTemperatures/t1",
+            "name": "Outdoor temperature"
+        },
+        "compressor": {
+            "id": "/systemStates/compressor",
+            "name": "Compressor state",
+            "type": "binary"
+        },
+        "additionalHeater": {
+            "id": "/systemStates/additionalHeater",
+            "name": "Additional heater"
+        },
+        "summaryAlarm": {
+            "id": "/systemStates/summaryAlarm",
+            "name": "Summary alarm",
+            "type": "binary"
+        }
+    }
+}

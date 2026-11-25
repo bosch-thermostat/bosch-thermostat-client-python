@@ -9,7 +9,7 @@ from aiohttp import ClientResponseError, ServerDisconnectedError
 
 from bosch_thermostat_client import exceptions
 from bosch_thermostat_client.circuits.circuit import BasicCircuit
-from bosch_thermostat_client.connectors.http import HttpConnector
+from bosch_thermostat_client.connectors.http import GET_TRIES, HttpConnector
 from bosch_thermostat_client.const import HC
 from bosch_thermostat_client.gateway.ivt import IVTGateway
 
@@ -43,7 +43,8 @@ class StartupConnectionTests(unittest.IsolatedAsyncioTestCase):
             await connector.get("/system/info")
         self.assertEqual(type(caught.exception).__name__, "DeviceConnectionError")
         self.assertIs(caught.exception.__cause__, error)
-        self.assertEqual(session.calls, 1)
+        # A GET that gets no answer is tried again before it says so.
+        self.assertEqual(session.calls, GET_TRIES)
 
     async def test_disconnect_keeps_type(self):
         connector = HttpConnector(
